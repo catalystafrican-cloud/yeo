@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { UserProfile, PayrollRun, PayrollItem, PayrollAdjustment, SchoolConfig, Campus, TeacherShift, LeaveType, LeaveRequest } from '../types';
 import MyPayrollView from './MyPayrollView';
 import MyAdjustmentsView from './MyAdjustmentsView';
@@ -15,6 +15,8 @@ import MyLeaveView from './MyLeaveView';
 import LeaveApprovalView from './LeaveApprovalView';
 import { BanknotesIcon, UsersIcon, CalendarIcon, BuildingIcon, ClockIcon, EditIcon, ChartBarIcon } from './common/icons';
 import Spinner from './common/Spinner';
+import { supa as supabase } from '../offline/client';
+
 
 interface HRPayrollModuleProps {
     userProfile: UserProfile;
@@ -151,7 +153,15 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
     onApproveLeaveRequest
 }) => {
     // Add null safety for all props including userProfile
-    const safeUserProfile = userProfile || { id: '', full_name: '', email: '', role: 'Teacher' as const };
+    if (!userProfile) {
+        return (
+            <div className="flex flex-col items-center justify-center h-96 space-y-4">
+                <p className="text-lg text-slate-500">Loading user profile...</p>
+            </div>
+        );
+    }
+    
+    const safeUserProfile = userProfile;
     const safeUsers = users || [];
     const safePayrollRuns = payrollRuns || [];
     const safePayrollItems = payrollItems || [];
@@ -193,9 +203,34 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
         }));
     }, [safePayrollRuns, safePayrollItems, safeUsers]);
 
+    const handleDeleteLeaveRequest = useCallback(async (id: number): Promise<boolean> => {
+        try {
+            if (!supabase) {
+                addToast('Database client not available', 'error');
+                return false;
+            }
+            
+            const { error } = await supabase.from('leave_requests').delete().eq('id', id);
+            if (error) {
+                console.error('Failed to delete leave request:', error);
+                addToast('Failed to delete leave request', 'error');
+                return false;
+            }
+            addToast('Leave request deleted', 'success');
+            return true;
+        } catch (e: any) {
+            console.error('Exception deleting leave request:', e);
+            addToast(e.message, 'error');
+            return false;
+        }
+    }, [addToast]);
+
     const handleGeneratePayslips = async (runId: number) => {
         try {
-            const { error } = await (window as any).supa.functions.invoke('generate-payslips', { body: { run_id: runId } });
+            if (!supabase || !supabase.functions) {
+                throw new Error('Supabase functions not available');
+            }
+            const { error } = await supabase.functions.invoke('generate-payslips', { body: { run_id: runId } });
             if(error) throw error;
             addToast('Payslips generated successfully.', 'success');
         } catch(e: any) {
@@ -322,7 +357,14 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
             case 'my_payslips':
                 return <MyPayrollView currentUser={userProfile} payrollRuns={safePayrollRuns} payrollItems={safePayrollItems} />;
             case 'my_leave':
-                return <MyLeaveView currentUser={userProfile} leaveTypes={safeLeaveTypes} leaveRequests={safeLeaveRequests} onSubmitRequest={onSubmitLeaveRequest} />;
+                return <MyLeaveView 
+                    currentUser={safeUserProfile} 
+                    leaveTypes={safeLeaveTypes} 
+                    leaveRequests={safeLeaveRequests} 
+                    onSave={onSubmitLeaveRequest}
+                    onDelete={handleDeleteLeaveRequest}
+                    addToast={addToast}
+                />;
             case 'my_adjustments':
                 return <MyAdjustmentsView currentUser={userProfile} />;
             case 'run_payroll':
