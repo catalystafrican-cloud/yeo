@@ -75,6 +75,21 @@ Make sure you've run the main `database_schema.sql` file first to create all tab
 
 After running the migrations, you can verify the fix by:
 
+### Using the Diagnostic Script (Recommended)
+
+Run the `diagnostic_student_record_id.sql` script in your Supabase SQL Editor. This comprehensive script will:
+- Check if the column exists
+- Count linked and unlinked student profiles
+- Verify the trigger function is up to date
+- Show sample data with linkage status
+- Provide a summary with actionable recommendations
+
+```sql
+-- Just run the entire diagnostic_student_record_id.sql file
+```
+
+### Manual Verification Queries
+
 1. Checking that the column exists:
 ```sql
 SELECT column_name, data_type 
