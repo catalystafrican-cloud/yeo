@@ -957,7 +957,7 @@ const App: React.FC = () => {
                             supabase.from('team_feedback').select('*'),
                             supabase.from('curriculum').select('*'),
                             supabase.from('curriculum_weeks').select('*'),
-                            supabase.from('class_groups').select('*, members:class_group_members(*, schedules:attendance_schedules(*), records:attendance_records(*)), teaching_entity:teaching_assignments(*, teacher:user_profiles(name), academic_class:academic_classes(name))'),
+                            supabase.from('class_groups').select('*, members:class_group_members(*, schedules:attendance_schedules(*), records:attendance_records(*)), teaching_entity:teaching_assignments(*, teacher:user_profiles(name), academic_class:academic_classes(name), subject:subjects(name))').eq('school_id', sp.school_id),
                             supabase.from('school_config').select('*').eq('school_id', sp.school_id).limit(1).maybeSingle(),
                             supabase.from('terms').select('*'),
                             supabase.from('academic_classes').select('*, assessment_structure:assessment_structures(*)'),
@@ -1041,7 +1041,9 @@ const App: React.FC = () => {
                         setTeamFeedback(getData(23));
                         setCurricula(getData(24));
                         setCurriculumWeeks(getData(25));
-                        setClassGroups(getData(26));
+                        const classGroupsData = getData(26);
+                        console.log('Class groups fetched:', classGroupsData);
+                        setClassGroups(classGroupsData);
                         setSchoolConfig(getSingleData(27));
                         setTerms(getData(28));
                         setAcademicClasses(getData(29));
