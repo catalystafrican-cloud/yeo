@@ -12,6 +12,7 @@
 import { createHmac } from 'crypto';
 
 // Sample webhook payload from Paystack for dedicatedaccount.credit event
+// Note: Using Date.now() for reference to ensure uniqueness if used in actual integration tests
 const sampleWebhookPayload = {
   event: "dedicatedaccount.credit",
   data: {
@@ -31,7 +32,7 @@ const sampleWebhookPayload = {
         slug: "wema-bank"
       }
     },
-    reference: "test_ref_" + Date.now(),
+    reference: "test_ref_" + Date.now(), // Unique reference for idempotency testing
     status: "success",
     paid_at: new Date().toISOString()
   }

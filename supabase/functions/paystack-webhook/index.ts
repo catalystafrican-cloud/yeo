@@ -328,11 +328,12 @@ serve(async (req) => {
       // Mark webhook as processed
       try {
         // Note: reference is stored in the payload JSONB field
+        // Using ->> operator for text extraction
         const { data, error: updateError } = await supabaseAdmin
           .from('webhook_events')
           .update({ processed: true, processed_at: new Date().toISOString() })
           .eq('event_type', event.event)
-          .filter('payload->reference', 'eq', reference);
+          .filter('payload->>reference', 'eq', reference);
         
         if (updateError) {
           console.log('Could not update webhook_events:', updateError.message);
