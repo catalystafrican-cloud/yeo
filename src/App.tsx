@@ -272,6 +272,9 @@ const App: React.FC = () => {
     const [booting, setBooting] = useState(true);
     const lastFetchedUserId = useRef<string | null>(null);
     const [dbError, setDbError] = useState<string | null>(null);
+    const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
+    const [isProfileLoading, setIsProfileLoading] = useState(false);
+    const profileLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [hash, setHash] = useState(window.location.hash);
 
@@ -414,8 +417,14 @@ const App: React.FC = () => {
             }
         });
 
-        return () => subscription.unsubscribe();
-    }, [addToast]);
+        return () => {
+            subscription.unsubscribe();
+            // Cleanup timeout on unmount
+            if (profileLoadTimeoutRef.current) {
+                clearTimeout(profileLoadTimeoutRef.current);
+            }
+        };
+    }, [addToast, fetchData]);
 
     // --- Realtime Updates ---
     useEffect(() => {
@@ -673,6 +682,23 @@ const App: React.FC = () => {
         // If refreshing, ignore the lastFetchedUserId check
         if (!forceRefresh && lastFetchedUserId.current === user.id && userProfileRef.current) return;
 
+        console.log('[Auth] Starting profile fetch for user:', user.id);
+        setIsProfileLoading(true);
+        setProfileLoadError(null);
+
+        // Clear any existing timeout
+        if (profileLoadTimeoutRef.current) {
+            clearTimeout(profileLoadTimeoutRef.current);
+        }
+
+        // Set a 15-second timeout for profile loading
+        profileLoadTimeoutRef.current = setTimeout(() => {
+            console.error('[Auth] Profile loading timeout after 15 seconds');
+            setProfileLoadError('Profile loading timed out. Please try again.');
+            setIsProfileLoading(false);
+            setBooting(false);
+        }, 15000);
+
         try {
             let staffProfile: any = null;
             let studentProfile: any = null;
@@ -680,16 +706,18 @@ const App: React.FC = () => {
             let studentProfileError: any = null;
             
             const metadataUserType = user.user_metadata?.user_type;
+            console.log('[Auth] User type from metadata:', metadataUserType);
             
             // Strict separation: If metadata says student, ONLY check student profile.
             if (metadataUserType === 'student') {
+                 console.log('[Auth] Fetching student profile...');
                  const studentRes = await supabase.from('student_profiles').select('*').eq('id', user.id).maybeSingle();
                  studentProfile = studentRes.data;
                  studentProfileError = studentRes.error;
 
                  // Self-healing for student if profile missing but user_type is student
                  if (!studentProfile) {
-                    console.log("Self-healing: creating student profile for authenticated user", user.id);
+                    console.log("[Auth] Self-healing: creating student profile for authenticated user", user.id);
                     // Important: We explicitly use the user's ID to link the profile.
                     const { data: newProfile, error: profileError } = await supabase.from('student_profiles').insert({
                         id: user.id,
@@ -702,24 +730,34 @@ const App: React.FC = () => {
 
                     if (newProfile) {
                         studentProfile = newProfile;
+                        console.log('[Auth] Student profile created successfully');
                         addToast("Student profile recovered successfully.", "success");
                     } else {
-                         console.error("Failed to recover student profile:", profileError);
+                         console.error("[Auth] Failed to recover student profile:", profileError);
                          if (profileError?.message.includes('policy')) {
                              setDbError("Account setup failed: Database permission denied. Please ask Admin to run the 'Fix Missing Data' script in Settings.");
+                             if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+                             setIsProfileLoading(false);
                              return;
                          }
                     }
+                 } else {
+                    console.log('[Auth] Student profile found');
                  }
             } 
             // If metadata says staff, ONLY check staff profile.
             else if (metadataUserType === 'staff') {
+                 console.log('[Auth] Fetching staff profile...');
                  const staffRes = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
                  staffProfile = staffRes.data;
                  staffProfileError = staffRes.error;
+                 if (staffProfile) {
+                    console.log('[Auth] Staff profile found');
+                 }
             }
             // If legacy/unknown, try both but prioritize student if found
             else {
+                 console.log('[Auth] Legacy/unknown user type, checking both profiles...');
                  // Check student first
                  const studentRes = await supabase.from('student_profiles').select('*').eq('id', user.id).maybeSingle();
                  studentProfile = studentRes.data;
@@ -759,6 +797,7 @@ const App: React.FC = () => {
 
             // --- PROCESS STAFF PROFILE ---
             if (staffProfile) {
+                console.log('[Auth] Processing staff profile...');
                 setUserProfile(staffProfile as UserProfile);
                 setUserType('staff');
                 lastFetchedUserId.current = user.id;
@@ -819,6 +858,7 @@ const App: React.FC = () => {
             } 
             // --- PROCESS STUDENT PROFILE ---
             else if (studentProfile) {
+                console.log('[Auth] Processing student profile...');
                 let className: string | null = null;
                 if (studentProfile.class_id) {
                     const { data: classData } = await supabase.from('classes').select('name').eq('id', studentProfile.class_id).maybeSingle();
@@ -877,12 +917,23 @@ const App: React.FC = () => {
                 setUserPermissions([]); 
                 const { data: studentReports } = await supabase.from('student_term_reports').select('*, term:terms(*)').eq('student_id', studentRecord.id).order('created_at', { ascending: false });
                 if (studentReports) setStudentTermReports(studentReports as any);
+                
+                // Clear timeout and mark as loaded successfully
+                if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+                setIsProfileLoading(false);
+                console.log('[Auth] Student profile loaded successfully');
                 setBooting(false);
                 return; 
             } else {
+                console.error('[Auth] No profile found for user');
                 setUserProfile(null);
                 setUserType(null);
+                
+                // Clear timeout
+                if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+                setIsProfileLoading(false);
                 setBooting(false);
+                
                 // Handle Database Schema Errors
                 if (staffProfileError?.message.includes('relation') || staffProfileError?.message.includes('does not exist') || studentProfileError?.message.includes('relation')) {
                     setDbError(staffProfileError?.message || studentProfileError?.message);
@@ -1087,6 +1138,11 @@ const App: React.FC = () => {
                             if (docs.improvement_plan) setImprovementPlan(docs.improvement_plan);
                         }
                         
+                        // Clear timeout and mark as loaded successfully
+                        if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+                        setIsProfileLoading(false);
+                        console.log('[Auth] Staff profile loaded successfully');
+                        
                         // Check for critical failures
                         const criticalIndices = [0, 1]; // Users, Reports
                         const criticalErrors = criticalIndices.filter(i => results[i].status === 'rejected').length;
@@ -1106,11 +1162,17 @@ const App: React.FC = () => {
             }
     
         } catch (error: any) {
-            console.error('Essential data fetching error:', error);
+            console.error('[Auth] Essential data fetching error:', error);
+            
+            // Clear timeout
+            if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+            setIsProfileLoading(false);
+            
              // Do NOT logout if it's a schema error, so the Setup screen can show
             if (error.message && (error.message.includes('relation') || error.message.includes('does not exist') || error.code === 'PGRST204')) {
                  setDbError(error.message);
             } else {
+                 setProfileLoadError(`Failed to load profile: ${error.message}`);
                  addToast(`Failed to fetch user data: ${error.message}. You will be logged out.`, 'error');
                  setUserProfile(null);
                  setUserType(null);
@@ -3036,6 +3098,53 @@ const App: React.FC = () => {
              return <DatabaseSetupError error={dbError} onLogout={handleLogout} />;
          }
          return <EnvironmentSetupError error={dbError} />;
+    }
+    
+    // Show profile loading error with retry/logout options
+    if (profileLoadError) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
+                <div className="max-w-md w-full mx-4 bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl border border-red-100 dark:border-red-900/30">
+                    <div className="mb-4 text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-full inline-block">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Profile Loading Error</h2>
+                    <p className="text-slate-600 dark:text-slate-300 mb-6">
+                        {profileLoadError}
+                    </p>
+                    
+                    <div className="space-y-3">
+                        <button 
+                            onClick={() => {
+                                setProfileLoadError(null);
+                                if (session?.user) {
+                                    console.log('[Auth] Retrying profile load...');
+                                    fetchData(session.user, true);
+                                }
+                            }}
+                            className="w-full px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
+                        >
+                            Retry Loading
+                        </button>
+                        
+                        <button 
+                            onClick={handleLogout}
+                            className="w-full px-4 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                        >
+                            Logout and Try Again
+                        </button>
+                    </div>
+                    
+                    <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                            If this problem persists, please contact support with the error details shown above.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
     }
     
     if (!userProfile) {
