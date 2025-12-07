@@ -3042,11 +3042,21 @@ const App: React.FC = () => {
 
     // Helper function to refresh class groups data
     const refreshClassGroups = useCallback(async () => {
-        const { data } = await supabase.from('class_groups').select('*, members:class_group_members(*, schedules:attendance_schedules(*), records:attendance_records(*)), teaching_entity:teaching_assignments!teaching_entity_id(*, teacher:user_profiles!teacher_user_id(name), academic_class:academic_classes!academic_class_id(name))');
-        if (data) {
-            setClassGroups(data);
+        try {
+            const { data, error } = await supabase.from('class_groups').select('*, members:class_group_members(*, schedules:attendance_schedules(*), records:attendance_records(*)), teaching_entity:teaching_assignments!teaching_entity_id(*, teacher:user_profiles!teacher_user_id(name), academic_class:academic_classes!academic_class_id(name))');
+            if (error) {
+                console.error('Error refreshing class groups:', error);
+                addToast('Failed to refresh class groups data', 'warning');
+                return;
+            }
+            if (data) {
+                setClassGroups(data);
+            }
+        } catch (error: any) {
+            console.error('Error refreshing class groups:', error);
+            addToast('Failed to refresh class groups data', 'warning');
         }
-    }, []);
+    }, [addToast]);
 
     const handleCreateClassAssignment = useCallback(async (
         assignmentData: { teacher_user_id: string; subject_id: number; class_id: number; arm_id: number | null },
@@ -3064,6 +3074,7 @@ const App: React.FC = () => {
             }
             
             // Create teaching assignment with correct field names
+            // Note: class_id parameter maps to academic_class_id in database (schema naming difference)
             const { data: assignment, error: assignmentError } = await Offline.insert('teaching_assignments', {
                 teacher_user_id: assignmentData.teacher_user_id,
                 subject_name: subject.name,
