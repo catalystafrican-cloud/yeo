@@ -25,6 +25,7 @@ import PositiveBehaviorModal from './components/PositiveBehaviorModal';
 import CreateStudentAccountModal from './components/CreateStudentAccountModal';
 import Toast from './components/Toast';
 import Spinner from './components/common/Spinner';
+import LoadingState, { LoadingPhase } from './components/LoadingState';
 import TourModal from './components/TourModal';
 import StudentPortal from './components/StudentPortal';
 import PublicTeacherRatingsView from './components/PublicTeacherRatingsView';
@@ -275,6 +276,8 @@ const App: React.FC = () => {
     const [isCreateStudentAccountModalOpen, setIsCreateStudentAccountModalOpen] = useState(false);
     
     const [booting, setBooting] = useState(true);
+    const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('authenticating');
+    const [showRetryButton, setShowRetryButton] = useState(false);
     const lastFetchedUserId = useRef<string | null>(null);
     const [dbError, setDbError] = useState<string | null>(null);
     const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
@@ -282,6 +285,17 @@ const App: React.FC = () => {
     const profileLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [hash, setHash] = useState(window.location.hash);
+
+    // Debug mode support (can be enabled via localStorage.setItem('debug_mode', 'true'))
+    const [debugMode] = useState(() => localStorage.getItem('debug_mode') === 'true');
+
+    // Debug logging helper
+    const debugLog = useCallback((message: string, ...args: any[]) => {
+        if (debugMode) {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] ${message}`, ...args);
+        }
+    }, [debugMode]);
 
     // Rate limit tracking
     const [aiRateLimitCooldown, setAiRateLimitCooldown] = useState<number | null>(null);
@@ -487,8 +501,11 @@ const App: React.FC = () => {
         if (!forceRefresh && lastFetchedUserId.current === user.id && userProfileRef.current) return;
 
         console.log('[Auth] Starting profile fetch for user:', user.id);
+        debugLog('[Auth] Starting profile fetch', { userId: user.id, forceRefresh });
+        setLoadingPhase('loading-profile');
         setIsProfileLoading(true);
         setProfileLoadError(null);
+        setShowRetryButton(false);
 
         // Clear any existing timeout
         if (profileLoadTimeoutRef.current) {
@@ -498,8 +515,10 @@ const App: React.FC = () => {
         // Set a 30-second timeout for profile loading (increased from 15s for slow connections)
         profileLoadTimeoutRef.current = setTimeout(() => {
             console.error('[Auth] Profile loading timeout after 30 seconds');
+            debugLog('[Auth] Profile loading timeout', { userId: user.id });
             setProfileLoadError('Profile loading timed out. Please try again.');
             setIsProfileLoading(false);
+            setShowRetryButton(true);
             setBooting(false);
         }, 30000);
 
@@ -726,6 +745,9 @@ const App: React.FC = () => {
                 if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
                 setIsProfileLoading(false);
                 console.log('[Auth] Student profile loaded successfully');
+                debugLog('[Auth] Student profile loaded successfully', { studentId: studentRecord.id });
+                
+                // Important: Set booting to false before changing view to prevent race conditions
                 setBooting(false);
                 
                 // Navigate to student default view
@@ -733,10 +755,11 @@ const App: React.FC = () => {
                 return; 
             } else {
                 console.error('[Auth] No profile found for user');
+                debugLog('[Auth] No profile found', { userId: user.id, staffProfileError, studentProfileError });
                 setUserProfile(null);
                 setUserType(null);
                 
-                // Clear timeout
+                // Clear timeout and ensure booting is reset
                 if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
                 setIsProfileLoading(false);
                 setBooting(false);
@@ -799,6 +822,8 @@ const App: React.FC = () => {
                         };
 
                         // PHASE 1: Critical data needed for dashboard
+                        setLoadingPhase('loading-critical-data');
+                        debugLog('[Data Fetch] Phase 1: Loading critical data');
                         const criticalQueries = [
                             // Bypassing cache if forceRefresh is true for critical lists (users, students)
                             forceRefresh 
@@ -907,25 +932,32 @@ const App: React.FC = () => {
                         // Check for critical failures
                         const criticalErrors = criticalResults.filter(r => r.status === 'rejected').length;
                         if (criticalErrors > 0) {
+                            debugLog('[Data Fetch] Critical data errors detected', { count: criticalErrors });
                             addToast("Some core data failed to load. The app may not function correctly.", "error");
                         }
                         
                         // Clear timeout and mark profile as loaded
                         if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
                         setIsProfileLoading(false);
-                        setBooting(false);
                         console.log('[Auth] Critical data loaded, showing dashboard...');
+                        debugLog('[Auth] Critical data loaded, showing dashboard');
+                        
+                        // Important: Set booting to false before changing view to prevent race conditions
+                        setBooting(false);
                         
                         // Navigate to staff default view immediately
                         setCurrentView(VIEWS.DASHBOARD);
                         
                         // Load background data (Phase 2) asynchronously
+                        setLoadingPhase('loading-background-data');
                         console.log('[Data Fetch] Phase 2: Loading background data...');
+                        debugLog('[Data Fetch] Phase 2: Loading background data');
                         Promise.allSettled(backgroundQueries).then(backgroundResults => {
                             // Log background query results
                             backgroundResults.forEach((result, index) => {
                                 if (result.status === 'rejected') {
                                     console.error(`[Data Fetch] Background query ${index} failed:`, result.reason);
+                                    debugLog('[Data Fetch] Background query failed', { index, reason: result.reason });
                                 }
                             });
                             
@@ -1032,11 +1064,13 @@ const App: React.FC = () => {
                         });
                     } catch (error: any) {
                         console.error('[Auth] Critical data fetching error:', error);
+                        debugLog('[Auth] Critical data fetching error', { error: error.message, stack: error.stack });
                         
-                        // Clear timeout
+                        // Clear timeout and ensure all loading states are reset
                         if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
                         setIsProfileLoading(false);
                         setBooting(false);
+                        setShowRetryButton(true);
                         
                         // Do NOT logout if it's a schema error, so the Setup screen can show
                         if (error.message && (error.message.includes('relation') || error.message.includes('does not exist') || error.code === 'PGRST204')) {
@@ -1054,10 +1088,12 @@ const App: React.FC = () => {
     
         } catch (error: any) {
             console.error('[Auth] Essential data fetching error:', error);
+            debugLog('[Auth] Essential data fetching error', { error: error.message, stack: error.stack });
             
-            // Clear timeout
+            // Clear timeout and ensure all loading states are reset
             if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
             setIsProfileLoading(false);
+            setShowRetryButton(true);
             
              // Do NOT logout if it's a schema error, so the Setup screen can show
             if (error.message && (error.message.includes('relation') || error.message.includes('does not exist') || error.code === 'PGRST204')) {
@@ -1071,7 +1107,7 @@ const App: React.FC = () => {
             }
             setBooting(false);
         }
-    }, [addToast, handleLogout]); 
+    }, [addToast, handleLogout, debugLog]); 
     // --- Auth Logic & Data Fetching ---
     
     useEffect(() => {
@@ -4545,7 +4581,26 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
     // ... (Rendering Logic) ...
 
     if (booting) {
-        return <div className="flex items-center justify-center h-screen"><Spinner size="lg" /></div>;
+        return (
+            <LoadingState 
+                phase={loadingPhase}
+                showRetry={showRetryButton}
+                onRetry={() => {
+                    if (session?.user) {
+                        console.log('[Auth] Retrying data fetch...');
+                        debugLog('[Auth] User initiated retry');
+                        setShowRetryButton(false);
+                        fetchData(session.user, true);
+                    }
+                }}
+                debugMode={debugMode}
+                debugInfo={debugMode ? {
+                    timestamp: new Date().toISOString(),
+                    authState: session ? 'authenticated' : 'not authenticated',
+                    error: profileLoadError || undefined
+                } : undefined}
+            />
+        );
     }
 
     if (!session) {
