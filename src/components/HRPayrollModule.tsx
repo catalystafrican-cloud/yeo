@@ -1,6 +1,6 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
-import type { UserProfile, PayrollRun, PayrollItem, PayrollAdjustment, SchoolConfig, Campus, TeacherShift, LeaveType, LeaveRequest } from '../types';
+import type { UserProfile, PayrollRun, PayrollItem, PayrollAdjustment, SchoolConfig, Campus, TeacherShift, LeaveType, LeaveRequest, Team } from '../types';
+import { LeaveRequestStatus } from '../types';
 import MyPayrollView from './MyPayrollView';
 import MyAdjustmentsView from './MyAdjustmentsView';
 import PayrollPage from './PayrollPage';
@@ -42,6 +42,7 @@ interface HRPayrollModuleProps {
     leaveRequests: LeaveRequest[];
     onSubmitLeaveRequest: (request: Partial<LeaveRequest>) => Promise<boolean>;
     onApproveLeaveRequest: (requestId: number, status: 'Approved' | 'Rejected', notes?: string) => Promise<boolean>;
+    teams: Team[];
 }
 
 const BankDetailsModal: React.FC<{
@@ -150,7 +151,8 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
     onDeleteCampus,
     leaveRequests,
     onSubmitLeaveRequest,
-    onApproveLeaveRequest
+    onApproveLeaveRequest,
+    teams
 }) => {
     // Add null safety for all props including userProfile
     if (!userProfile) {
@@ -171,6 +173,7 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
     const safeLeaveTypes = leaveTypes || [];
     const safeLeaveRequests = leaveRequests || [];
     const safeUserPermissions = userPermissions || [];
+    const safeTeams = teams || [];
 
     const canManagePayroll = safeUserPermissions.includes('manage-payroll') || safeUserPermissions.includes('*');
     const canManageHR = safeUserPermissions.includes('school.console.structure_edit') || safeUserPermissions.includes('*');
@@ -376,7 +379,25 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
             case 'adjustments':
                 return <PayrollAdjustmentsManager users={safeUsers} addToast={addToast} campuses={safeCampuses} />;
             case 'leave_approvals':
-                return <LeaveApprovalView leaveRequests={safeLeaveRequests} users={safeUsers} leaveTypes={safeLeaveTypes} onApprove={onApproveLeaveRequest} />;
+                return <LeaveApprovalView 
+                    currentUser={safeUserProfile}
+                    addToast={addToast}
+                    allRequests={safeLeaveRequests}
+                    onUpdateStatus={async (requestId: number, status: LeaveRequestStatus): Promise<boolean> => {
+                        // LeaveApprovalView uses LeaveRequestStatus enum (lowercase: 'approved', 'rejected')
+                        // but the parent handler expects capitalized strings ('Approved', 'Rejected')
+                        // This conversion maintains the existing API contract
+                        const mappedStatus = status === LeaveRequestStatus.Approved ? 'Approved' : 
+                                            status === LeaveRequestStatus.Rejected ? 'Rejected' : 
+                                            null;
+                        if (!mappedStatus) {
+                            addToast('Invalid status update', 'error');
+                            return false;
+                        }
+                        return await onApproveLeaveRequest(requestId, mappedStatus);
+                    }}
+                    teams={safeTeams}
+                />;
             case 'shifts':
                 return <ShiftManager shifts={safeTeacherShifts} users={safeUsers} onSave={onSaveShift} onDelete={onDeleteShift} />;
             case 'leave_types':
@@ -386,7 +407,11 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
             case 'settings':
                 return <PayrollSettings schoolConfig={schoolConfig} onSave={onSaveSchoolConfig} />;
             default:
-                return null;
+                return (
+                    <div className="text-center py-8 text-slate-500">
+                        <p>Section not found. Please select a valid option from the menu.</p>
+                    </div>
+                );
         }
     };
 
@@ -439,10 +464,12 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
                     </div>
                 </nav>
 
-                {/* Main Content */}
+                {/* Main Content with Error Boundary */}
                 <main className="flex-1 min-w-0">
                     <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-slate-200/60 dark:border-slate-800/60 p-6 shadow-xl min-h-[60vh]">
-                        {renderContent()}
+                        <ErrorBoundary>
+                            {renderContent()}
+                        </ErrorBoundary>
                     </div>
                 </main>
             </div>
@@ -457,5 +484,62 @@ const HRPayrollModule: React.FC<HRPayrollModuleProps> = ({
         </div>
     );
 };
+
+// Simple Error Boundary Component for HR Payroll Module
+class ErrorBoundary extends React.Component<
+    { children: React.ReactNode },
+    { hasError: boolean; errorMessage?: string }
+> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(error: Error) {
+        // In production, use a generic message. In development, show the actual error.
+        const safeMessage = process.env.NODE_ENV === 'development' 
+            ? (error.message || 'An unexpected error occurred')
+            : 'An unexpected error occurred';
+        return { hasError: true, errorMessage: safeMessage };
+    }
+
+    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        // Log full error details to console for debugging
+        console.error('HR Payroll Module Error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <div className="text-red-500 text-6xl">⚠️</div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                        Something went wrong
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 text-center max-w-md">
+                        An error occurred while loading this section. Please try refreshing the page or contact support if the problem persists.
+                    </p>
+                    <button
+                        onClick={() => this.setState({ hasError: false, errorMessage: undefined })}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Try Again
+                    </button>
+                    {/* Only show error details in development mode */}
+                    {process.env.NODE_ENV === 'development' && this.state.errorMessage && (
+                        <details className="mt-4 text-xs text-slate-500 max-w-md">
+                            <summary className="cursor-pointer">Error details (dev only)</summary>
+                            <pre className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded overflow-auto">
+                                {this.state.errorMessage}
+                            </pre>
+                        </details>
+                    )}
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
 
 export default HRPayrollModule;
