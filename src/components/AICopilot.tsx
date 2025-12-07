@@ -39,10 +39,12 @@ interface AICopilotProps {
   onAddAnnouncement: (title: string, content: string) => Promise<void>;
   addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   onNavigate: (context: NavigationContext) => void;
+  isPageView?: boolean;
 }
 
 const AICopilot: React.FC<AICopilotProps> = (props) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isPageView = false } = props;
+  const [isOpen, setIsOpen] = useState(isPageView);
   const [messages, setMessages] = useState<AssistantMessage[]>([
     { id: 'initial', sender: 'ai', text: `Hello! I'm your AI Copilot. How can I help you today?` }
   ]);
@@ -281,18 +283,22 @@ const AICopilot: React.FC<AICopilotProps> = (props) => {
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-40 w-16 h-16 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition-transform hover:scale-110"
-        aria-label="Toggle AI Copilot"
-      >
-        <WandIcon className="w-8 h-8" />
-      </button>
+      {/* Only show floating button if NOT page view */}
+      {!isPageView && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed bottom-6 right-6 z-40 w-16 h-16 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-blue-700 transition-transform hover:scale-110"
+          aria-label="Toggle AI Copilot"
+        >
+          <WandIcon className="w-8 h-8" />
+        </button>
+      )}
 
-      <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl border-l border-slate-200/60 dark:border-slate-800/60 z-50 flex flex-col transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      {/* Chat panel - modify positioning for page view */}
+      <div className={`${isPageView ? 'relative w-full h-full' : 'fixed top-0 right-0 h-full w-full max-w-md'} bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl border-l border-slate-200/60 dark:border-slate-800/60 z-50 flex flex-col transition-transform duration-300 ease-in-out ${isPageView || isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <header className="flex items-center justify-between p-4 border-b border-slate-200/60 dark:border-slate-800/60">
           <h2 className="text-lg font-bold flex items-center gap-2"><WandIcon className="w-5 h-5 text-blue-500" /> AI Copilot</h2>
-          <button onClick={() => setIsOpen(false)}><CloseIcon className="w-6 h-6" /></button>
+          {!isPageView && <button onClick={() => setIsOpen(false)}><CloseIcon className="w-6 h-6" /></button>}
         </header>
 
         <div className="flex-grow p-4 space-y-4 overflow-y-auto">

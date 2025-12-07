@@ -351,6 +351,7 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                 onAddAnnouncement={actions.handleAddAnnouncement}
                 addToast={actions.addToast}
                 onNavigate={actions.handleNavigation}
+                isPageView={true}
              />;
         case VIEWS.USER_MANAGEMENT:
              return <UserManagement 
@@ -747,6 +748,18 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                 onTakeSurvey={(survey) => actions.setCurrentView(`${VIEWS.TAKE_SURVEY}/${survey.id}`)}
                 takenSurveyIds={new Set(data.surveyResponses?.map((r: any) => r.survey_id) || [])} 
              />;
+        case VIEWS.TAKE_SURVEY:
+            if (param1) {
+                const surveyToTake = data.surveys.find((s: any) => s.id === Number(param1));
+                if (surveyToTake) {
+                    return <QuizTakerView 
+                        quiz={surveyToTake} 
+                        onBack={() => actions.setCurrentView(VIEWS.SURVEYS)} 
+                        addToast={actions.addToast} 
+                    />;
+                }
+            }
+            return <div>Survey not found</div>;
         default:
             return <div>View not found: {baseView}</div>;
     }
