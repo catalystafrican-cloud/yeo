@@ -3774,6 +3774,31 @@ const App: React.FC = () => {
         return true;
     }, [addToast]);
 
+    // --- Social Links Handlers ---
+    const handleSaveSocialLinks = useCallback(async (links: SocialAccount): Promise<void> => {
+        if (!userProfile || !schoolSettings) {
+            addToast('Unable to save social links: missing profile or settings', 'error');
+            return;
+        }
+        
+        try {
+            const success = await handleUpdateSchoolSettings({
+                social_accounts: links
+            });
+            
+            if (success) {
+                setSocialAccounts(links);
+                addToast('Social links saved successfully.', 'success');
+            } else {
+                addToast('Failed to save social links.', 'error');
+            }
+        } catch (e: unknown) {
+            console.error('Error saving social links:', e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            addToast(`Failed to save social links: ${errorMessage}`, 'error');
+        }
+    }, [userProfile, schoolSettings, handleUpdateSchoolSettings, addToast, setSocialAccounts]);
+
     // --- Leave Request Handlers ---
     const handleSubmitLeaveRequest = useCallback(async (request: Partial<LeaveRequest>): Promise<boolean> => {
         if (!userProfile) return false;
