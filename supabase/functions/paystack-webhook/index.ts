@@ -112,16 +112,21 @@ serve(async (req) => {
 
     // Log the webhook event for audit trail
     try {
-      await supabaseAdmin.from('webhook_events').insert({
+      const { error: insertError } = await supabaseAdmin.from('webhook_events').insert({
         event_type: event.event,
         payload: event,
         signature: signature,
         processed: false,
         created_at: new Date().toISOString(),
       });
-    } catch (error) {
-      // If webhook_events table doesn't exist, just log to console
-      console.log('Could not log to webhook_events table (table may not exist):', error.message);
+      
+      if (insertError) {
+        // Table might not exist or other error occurred
+        console.log('Could not log to webhook_events table:', insertError.message);
+      }
+    } catch (error: any) {
+      // Catch any unexpected errors (network issues, etc.)
+      console.log('Error logging webhook event:', error?.message || 'Unknown error');
     }
 
     // Handle dedicatedaccount.credit event
@@ -322,14 +327,19 @@ serve(async (req) => {
 
       // Mark webhook as processed
       try {
-        await supabaseAdmin
+        // Note: reference is stored in the payload JSONB field
+        const { data, error: updateError } = await supabaseAdmin
           .from('webhook_events')
           .update({ processed: true, processed_at: new Date().toISOString() })
-          .eq('reference', reference)
-          .eq('event_type', event.event);
-      } catch (error) {
-        // Ignore if table doesn't exist
-        console.log('Could not update webhook_events table:', error.message);
+          .eq('event_type', event.event)
+          .filter('payload->reference', 'eq', reference);
+        
+        if (updateError) {
+          console.log('Could not update webhook_events:', updateError.message);
+        }
+      } catch (error: any) {
+        // Table might not exist or other error occurred
+        console.log('Could not update webhook_events table:', error?.message);
       }
 
       return new Response(JSON.stringify({ 
