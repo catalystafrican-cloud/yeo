@@ -389,7 +389,11 @@ const App: React.FC = () => {
 
     // Helper function to check if error is a rate limit error
     const isRateLimitError = (error: any): boolean => {
-        return error?.message?.includes('429') || error?.status === 429;
+        // Check for various rate limit error formats
+        return error?.message?.includes('429') || 
+               error?.status === 429 || 
+               error?.response?.status === 429 ||
+               error?.code === 429;
     };
 
     const handleLogout = useCallback(async () => {
@@ -2215,8 +2219,10 @@ const App: React.FC = () => {
     }, [addToast]);
 
     const handleRunWeeklyComplianceCheck = useCallback(async (): Promise<void> => {
-        // NOTE: This is a placeholder implementation
-        // The actual compliance check logic needs to be implemented
+        // ⚠️ WARNING: This is a NO-OP placeholder implementation
+        // The button in ComplianceTracker will show this message but perform no actual checks
+        // This function was added to fix a ReferenceError but does not implement real validation
+        // 
         // TODO: Implement the following:
         // - Check lesson plan submission rates
         // - Verify teacher attendance compliance
