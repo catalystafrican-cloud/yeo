@@ -223,7 +223,7 @@ serve(async (req) => {
         const emailPrefix = studentRecord.admission_number 
             ? studentRecord.admission_number.toLowerCase().replace(/[^a-z0-9]/g, '') 
             : studentRecord.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const email = `${emailPrefix}.${Math.floor(Math.random() * 1000)}@school.com`;
+        const email = studentRecord.email || `${emailPrefix}.${Math.floor(Math.random() * 1000)}@school.com`;
 
         const { data: user, error: userError } = await supabaseAdmin.auth.admin.createUser({
             email: email,
@@ -288,7 +288,7 @@ serve(async (req) => {
              const emailPrefix = student.admission_number 
                 ? student.admission_number.toLowerCase().replace(/[^a-z0-9]/g, '') 
                 : student.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-             const email = `${emailPrefix}.${Math.floor(Math.random()*1000)}@school.com`;
+             const email = student.email || `${emailPrefix}.${Math.floor(Math.random()*1000)}@school.com`;
 
              const { data: user, error: userError } = await supabaseAdmin.auth.admin.createUser({
                 email: email,
