@@ -926,7 +926,6 @@ const App: React.FC = () => {
                 
                 // Navigate to student default view
                 setCurrentView(VIEWS.MY_SUBJECTS);
-                window.location.hash = VIEWS.MY_SUBJECTS;
                 return; 
             } else {
                 console.error('[Auth] No profile found for user');
@@ -1164,7 +1163,6 @@ const App: React.FC = () => {
                         
                         // Navigate to staff default view
                         setCurrentView(VIEWS.DASHBOARD);
-                        window.location.hash = VIEWS.DASHBOARD;
                     }
                 })();
             }
