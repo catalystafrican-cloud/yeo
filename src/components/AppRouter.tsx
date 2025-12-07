@@ -1,7 +1,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { VIEWS } from '../constants';
-import type { PayrollAdjustment } from '../types';
+import type { PayrollAdjustment, StudentTermReport } from '../types';
 import Dashboard from './Dashboard';
 import ReportForm from './ReportForm';
 import ReportFeed from './ReportFeed';
@@ -91,9 +91,9 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                     addToast={actions.addToast} 
                 />;
             case VIEWS.STUDENT_REPORTS:
-                 // Filter reports to only show the current student's reports
+                 // Filter reports to show only the logged-in student's reports for privacy/security
                  const studentReports = data.studentTermReports.filter(
-                     (r: any) => r.student_id === data.userProfile.student_record_id
+                     (r: StudentTermReport) => r.student_id === data.userProfile.student_record_id
                  );
                  return <StudentReportList 
                     reports={studentReports} 
