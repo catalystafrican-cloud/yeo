@@ -348,11 +348,25 @@ const ClassGroupManager: React.FC<ClassGroupManagerProps> = ({
     const isAdmin = userPermissions.includes('manage-class-groups') || userPermissions.includes('*');
 
     const myGroups = useMemo(() => {
+        if (!classGroups || classGroups.length === 0) {
+            console.log('No class groups available');
+            return [];
+        }
+        console.log('Filtering class groups:', { 
+            totalGroups: classGroups.length, 
+            isAdmin, 
+            currentUserId: currentUser.id 
+        });
         if (isAdmin) return classGroups;
-        return classGroups.filter(g => 
+        const filtered = classGroups.filter(g => 
             g.created_by === currentUser.id || 
             g.teaching_entity?.teacher_user_id === currentUser.id
         );
+        console.log('Filtered groups for user:', { 
+            filteredCount: filtered.length,
+            groups: filtered.map(g => ({ id: g.id, name: g.name, created_by: g.created_by, teacher_user_id: g.teaching_entity?.teacher_user_id }))
+        });
+        return filtered;
     }, [classGroups, currentUser.id, isAdmin]);
 
     const selectedGroup = myGroups.find(g => g.id === selectedGroupId);
