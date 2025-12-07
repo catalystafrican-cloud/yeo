@@ -5097,6 +5097,9 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
                                     handleResetStudentPassword,
                                     handleResetStudentStrikes,
                                     handleLogCommunication,
+                                    handleBulkDeleteStudentAccounts,
+                                    handleDeleteStudent,
+                                    handleBulkDeleteStudents,
                                 }}
                             />
                         </Suspense>
