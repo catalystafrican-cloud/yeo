@@ -1,7 +1,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { VIEWS } from '../constants';
-import type { PayrollAdjustment } from '../types';
+import type { PayrollAdjustment, StudentTermReport } from '../types';
 import Dashboard from './Dashboard';
 import ReportForm from './ReportForm';
 import ReportFeed from './ReportFeed';
@@ -47,6 +47,7 @@ import StudentFinanceView from './StudentFinanceView';
 import IdCardGenerator from './IdCardGenerator';
 import StorefrontView from './StorefrontView';
 import OrderManager from './OrderManager';
+import StoreManager from './StoreManager';
 import Spinner from './common/Spinner';
 import StudentPortal from './StudentPortal';
 import StudentRateMyTeacherView from './StudentRateMyTeacherView';
@@ -90,8 +91,12 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                     addToast={actions.addToast} 
                 />;
             case VIEWS.STUDENT_REPORTS:
+                 // Filter reports to show only the logged-in student's reports for privacy/security
+                 const studentReports = data.studentTermReports.filter(
+                     (r: StudentTermReport) => r.student_id === data.userProfile.student_record_id
+                 );
                  return <StudentReportList 
-                    reports={data.studentTermReports} 
+                    reports={studentReports} 
                     onSelectReport={(r) => actions.setCurrentView(`${VIEWS.STUDENT_REPORT}/${r.student_id}/${r.term_id}`)} 
                  />;
             case VIEWS.STUDENT_SURVEYS:
@@ -233,6 +238,9 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                 teachingAssignments={data.academicAssignments}
                 onBulkCreateStudentAccounts={actions.handleBulkCreateStudentAccounts}
                 onBulkResetStrikes={actions.handleResetStudentStrikes}
+                onBulkDeleteAccounts={actions.handleBulkDeleteStudentAccounts}
+                onDeleteStudent={actions.handleDeleteStudent}
+                onBulkDeleteStudents={actions.handleBulkDeleteStudents}
             />;
         case VIEWS.STUDENT_PROFILE:
             if (param1) {
@@ -712,6 +720,17 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                 onUpdateStatus={actions.handleUpdateOrderStatus}
                 onAddNote={actions.handleAddOrderNote}
                 onDeleteNote={actions.handleDeleteOrderNote}
+             />;
+        case VIEWS.STORE_MANAGER:
+             return <StoreManager 
+                inventory={data.inventory}
+                orders={data.orders}
+                onSaveItem={actions.handleSaveInventoryItem}
+                onDeleteItem={actions.handleDeleteInventoryItem}
+                addToast={actions.addToast}
+                onUpdateOrderStatus={actions.handleUpdateOrderStatus}
+                onAddOrderNote={actions.handleAddOrderNote}
+                onDeleteOrderNote={actions.handleDeleteOrderNote}
              />;
         case VIEWS.SOCIAL_MEDIA_HUB:
              return <SocialMediaHubView 
