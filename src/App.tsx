@@ -3274,12 +3274,23 @@ const App: React.FC = () => {
                 }
             }
             
-            // Refresh curriculum data
-            const { data: refreshedCurricula } = await supabase.from('curriculum').select('*');
+            // Refresh curriculum data filtered by school
+            const { data: refreshedCurricula } = await supabase
+                .from('curriculum')
+                .select('*')
+                .eq('school_id', staffProfile.school_id);
             if (refreshedCurricula) setCurricula(refreshedCurricula);
             
-            const { data: refreshedWeeks } = await supabase.from('curriculum_weeks').select('*');
-            if (refreshedWeeks) setCurriculumWeeks(refreshedWeeks);
+            const { data: refreshedWeeks } = await supabase
+                .from('curriculum_weeks')
+                .select('*, curriculum!inner(school_id)')
+                .eq('curriculum.school_id', staffProfile.school_id);
+            if (refreshedWeeks) setCurriculumWeeks(refreshedWeeks.map(w => ({
+                id: w.id,
+                curriculum_id: w.curriculum_id,
+                week_number: w.week_number,
+                expected_topics: w.expected_topics
+            })));
             
             addToast('Curriculum saved successfully.', 'success');
             return true;
@@ -3287,7 +3298,7 @@ const App: React.FC = () => {
             addToast(`Error saving curriculum: ${error.message}`, 'error');
             return false;
         }
-    }, [userProfile, userType, addToast]);
+    }, [userProfile, userType, addToast, setCurricula, setCurriculumWeeks]);
 
     // ... (Lesson Plan handlers)
     const handleSaveLessonPlan = useCallback(async (planData: Partial<LessonPlan>, generateWithAi: boolean, file: File | null) => {
@@ -3397,8 +3408,12 @@ const App: React.FC = () => {
                 return false;
             }
             
-            // Refresh score entries
-            const { data: refreshedScores } = await supabase.from('score_entries').select('*');
+            // Refresh score entries for the current school
+            const staffProfile = userProfile as UserProfile;
+            const { data: refreshedScores } = await supabase
+                .from('score_entries')
+                .select('*')
+                .eq('school_id', staffProfile.school_id);
             if (refreshedScores) setScoreEntries(refreshedScores);
             
             addToast('Scores saved successfully.', 'success');
@@ -3407,7 +3422,7 @@ const App: React.FC = () => {
             addToast(`Error saving scores: ${error.message}`, 'error');
             return false;
         }
-    }, [userProfile, userType, addToast]);
+    }, [userProfile, userType, addToast, setScoreEntries]);
 
     const handleSubmitScoresForReview = useCallback(async (assignmentId: number): Promise<boolean> => {
         if (!userProfile || userType !== 'staff') return false;
@@ -3436,7 +3451,7 @@ const App: React.FC = () => {
             addToast(`Error submitting scores: ${error.message}`, 'error');
             return false;
         }
-    }, [userProfile, userType, addToast]);
+    }, [userProfile, userType, addToast, setAcademicAssignments]);
 
     // --- Campus Handlers ---
     const handleSaveCampus = useCallback(async (campus: Partial<Campus>) => {
