@@ -676,6 +676,23 @@ const App: React.FC = () => {
         // If refreshing, ignore the lastFetchedUserId check
         if (!forceRefresh && lastFetchedUserId.current === user.id && userProfileRef.current) return;
 
+        console.log('[Auth] Starting profile fetch for user:', user.id);
+        setIsProfileLoading(true);
+        setProfileLoadError(null);
+
+        // Clear any existing timeout
+        if (profileLoadTimeoutRef.current) {
+            clearTimeout(profileLoadTimeoutRef.current);
+        }
+
+        // Set a 15-second timeout for profile loading
+        profileLoadTimeoutRef.current = setTimeout(() => {
+            console.error('[Auth] Profile loading timeout after 15 seconds');
+            setProfileLoadError('Profile loading timed out. Please try again.');
+            setIsProfileLoading(false);
+            setBooting(false);
+        }, 15000);
+
         try {
             let staffProfile: any = null;
             let studentProfile: any = null;
@@ -683,16 +700,18 @@ const App: React.FC = () => {
             let studentProfileError: any = null;
             
             const metadataUserType = user.user_metadata?.user_type;
+            console.log('[Auth] User type from metadata:', metadataUserType);
             
             // Strict separation: If metadata says student, ONLY check student profile.
             if (metadataUserType === 'student') {
+                 console.log('[Auth] Fetching student profile...');
                  const studentRes = await supabase.from('student_profiles').select('*').eq('id', user.id).maybeSingle();
                  studentProfile = studentRes.data;
                  studentProfileError = studentRes.error;
 
                  // Self-healing for student if profile missing but user_type is student
                  if (!studentProfile) {
-                    console.log("Self-healing: creating student profile for authenticated user", user.id);
+                    console.log("[Auth] Self-healing: creating student profile for authenticated user", user.id);
                     // Important: We explicitly use the user's ID to link the profile.
                     const { data: newProfile, error: profileError } = await supabase.from('student_profiles').insert({
                         id: user.id,
@@ -705,24 +724,34 @@ const App: React.FC = () => {
 
                     if (newProfile) {
                         studentProfile = newProfile;
+                        console.log('[Auth] Student profile created successfully');
                         addToast("Student profile recovered successfully.", "success");
                     } else {
-                         console.error("Failed to recover student profile:", profileError);
+                         console.error("[Auth] Failed to recover student profile:", profileError);
                          if (profileError?.message.includes('policy')) {
                              setDbError("Account setup failed: Database permission denied. Please ask Admin to run the 'Fix Missing Data' script in Settings.");
+                             if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
+                             setIsProfileLoading(false);
                              return;
                          }
                     }
+                 } else {
+                    console.log('[Auth] Student profile found');
                  }
             } 
             // If metadata says staff, ONLY check staff profile.
             else if (metadataUserType === 'staff') {
+                 console.log('[Auth] Fetching staff profile...');
                  const staffRes = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
                  staffProfile = staffRes.data;
                  staffProfileError = staffRes.error;
+                 if (staffProfile) {
+                    console.log('[Auth] Staff profile found');
+                 }
             }
             // If legacy/unknown, try both but prioritize student if found
             else {
+                 console.log('[Auth] Legacy/unknown user type, checking both profiles...');
                  // Check student first
                  const studentRes = await supabase.from('student_profiles').select('*').eq('id', user.id).maybeSingle();
                  studentProfile = studentRes.data;
