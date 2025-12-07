@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy } from 'react';
 import { VIEWS } from '../constants';
+import type { PayrollAdjustment } from '../types';
 import Dashboard from './Dashboard';
 import ReportForm from './ReportForm';
 import ReportFeed from './ReportFeed';
@@ -669,7 +670,7 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
         case VIEWS.MY_ADJUSTMENTS:
              return <MyAdjustmentsView 
                 currentUser={data.userProfile} 
-                adjustments={data.payrollAdjustments?.filter((a: any) => a.user_id === data.userProfile.id)}
+                adjustments={data.payrollAdjustments?.filter((a: PayrollAdjustment) => a.user_id === data.userProfile.id)}
              />;
         case VIEWS.STUDENT_FINANCE:
              return <StudentFinanceView 

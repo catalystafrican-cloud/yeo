@@ -24,7 +24,7 @@ const LeaveRequestView: React.FC<LeaveRequestViewProps> = ({
     // Only fetch internally if props not provided (fallback for standalone use)
     const [internalRequests, setInternalRequests] = useState<LeaveRequest[]>([]);
     const [internalTypes, setInternalTypes] = useState<LeaveType[]>([]);
-    const [isLoading, setIsLoading] = useState(!propsRequests);
+    const [isLoading, setIsLoading] = useState(!(propsRequests && propsTypes));
     const [isFormOpen, setIsFormOpen] = useState(false);
 
     const requests = propsRequests || internalRequests;
