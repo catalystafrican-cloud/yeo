@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Student, UserProfile, BaseDataObject, TeachingAssignment, CreatedCredential } from '../types';
 import AddStudentModal from './AddStudentModal'; 
-import { PlusCircleIcon, DownloadIcon } from './common/icons';
+import { PlusCircleIcon, DownloadIcon, TrashIcon } from './common/icons';
 import Spinner from './common/Spinner';
 import { VIEWS, STUDENT_STATUSES } from '../constants';
 import { exportToCsv } from '../utils/export';
@@ -311,7 +311,7 @@ const StudentListView: React.FC<StudentListViewProps> = ({
       }
       
       // Double confirmation for safety
-      if (!window.confirm(`FINAL WARNING: ${selectedCount} students will be permanently removed from the system. Type OK to confirm.`)) {
+      if (!window.confirm(`FINAL WARNING: ${selectedCount} students will be permanently removed from the system. Are you absolutely sure?`)) {
           return;
       }
       
@@ -432,7 +432,7 @@ const StudentListView: React.FC<StudentListViewProps> = ({
                             className="px-4 py-1.5 bg-red-900 text-white text-sm font-bold rounded-md hover:bg-red-950 disabled:opacity-50 flex items-center gap-2"
                             title="Permanently delete selected students and all their data"
                         >
-                            {isDeletingStudents ? <Spinner size="sm"/> : '🗑️ Delete Students'}
+                            {isDeletingStudents ? <Spinner size="sm"/> : <><TrashIcon className="w-4 h-4" /> Delete Students</>}
                         </button>
                     )}
                      <button onClick={() => setSelectedIds(new Set())} className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-sm font-semibold rounded-md">Cancel</button>
