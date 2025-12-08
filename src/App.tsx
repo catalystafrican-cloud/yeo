@@ -99,6 +99,9 @@ const HRPayrollModule = lazyWithRetry(() => import('./components/HRPayrollModule
 const StoreManager = lazyWithRetry(() => import('./components/StoreManager'));
 const AppRouter = lazyWithRetry(() => import('./components/AppRouter'));
 
+// Auth-only views that authenticated users should not access
+const AUTH_ONLY_VIEWS = ['teacher-login', 'student-login', 'landing', 'public-ratings'];
+
 // Helper: Get Monday of the current week as a string
 const getWeekStartDateString = (date: Date): string => {
     const d = new Date(date);
@@ -1202,8 +1205,7 @@ const App: React.FC = () => {
 
     // Redirect authenticated users away from auth-only views
     useEffect(() => {
-        const authOnlyViews = ['teacher-login', 'student-login', 'landing', 'public-ratings'];
-        if (session && authOnlyViews.includes(currentView)) {
+        if (session && AUTH_ONLY_VIEWS.includes(currentView)) {
             setCurrentView(VIEWS.DASHBOARD);
         }
     }, [session, currentView]);
