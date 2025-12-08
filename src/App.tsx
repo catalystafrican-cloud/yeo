@@ -916,8 +916,11 @@ const App: React.FC = () => {
                         setBooting(false);
                         console.log('[Auth] Critical data loaded, showing dashboard...');
                         
-                        // Navigate to staff default view immediately
-                        setCurrentView(VIEWS.DASHBOARD);
+                        // Navigate to staff default view only if no hash is present
+                        const currentHash = decodeURIComponent(window.location.hash.substring(1) || '');
+                        if (!currentHash || currentHash.includes('access_token=') || currentHash.includes('error=')) {
+                            setCurrentView(VIEWS.DASHBOARD);
+                        }
                         
                         // Load background data (Phase 2) asynchronously
                         console.log('[Data Fetch] Phase 2: Loading background data...');
@@ -2984,6 +2987,39 @@ const App: React.FC = () => {
         addToast(`Invitation sent to ${email} for role ${role}.`, 'success');
     }, [addToast]);
 
+    const handleUpdateUser = useCallback(async (userId: string, userData: Partial<UserProfile>): Promise<boolean> => {
+        try {
+            const { error } = await Offline.update('user_profiles', userData, { id: userId });
+            if (error) {
+                addToast(error.message, 'error');
+                return false;
+            }
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...userData } : u));
+            addToast('User updated successfully.', 'success');
+            return true;
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+            return false;
+        }
+    }, [addToast]);
+
+    const handleDeleteUser = useCallback(async (userId: string): Promise<boolean> => {
+        try {
+            // Note: This should also handle auth deletion via Edge Function
+            const { error } = await Offline.del('user_profiles', { id: userId });
+            if (error) {
+                addToast(error.message, 'error');
+                return false;
+            }
+            setUsers(prev => prev.filter(u => u.id !== userId));
+            addToast('User deleted successfully.', 'success');
+            return true;
+        } catch (e: any) {
+            addToast(`Error: ${e.message}`, 'error');
+            return false;
+        }
+    }, [addToast]);
+
     const handleDeactivateUser = useCallback(async (userId: string, isActive: boolean) => {
         // Logic to toggle active state in DB/Auth
         addToast(`User ${isActive ? 'activated' : 'deactivated'}.`, 'success');
@@ -4216,21 +4252,37 @@ const App: React.FC = () => {
         }
     }, [userProfile, addToast]);
 
-    const handleUpdateClassEnrollment = useCallback(async (classId: number, studentIds: number[]): Promise<boolean> => {
+    const handleUpdateClassEnrollment = useCallback(async (classId: number, termId: number, studentIds: number[]): Promise<boolean> => {
         if (!userProfile) return false;
         try {
             // Delete existing enrollments for this class
             const { error: deleteError } = await Offline.del('academic_class_students', { academic_class_id: classId });
             if (deleteError) { addToast(deleteError.message, 'error'); return false; }
             
+            // Optimistically update local state - remove old enrollments
+            setAcademicClassStudents(prev => prev.filter(e => e.academic_class_id !== classId));
+            
             // Insert new enrollments
+            const newEnrollments: AcademicClassStudent[] = [];
             for (const studentId of studentIds) {
-                const { error } = await Offline.insert('academic_class_students', {
+                const enrollment = {
                     academic_class_id: classId,
                     student_id: studentId,
-                });
+                    enrolled_term_id: termId,
+                };
+                const { error, data } = await Offline.insert('academic_class_students', enrollment);
                 if (error) { addToast(error.message, 'error'); return false; }
+                // Add to local state if data returned (online or optimistic)
+                if (data) {
+                    newEnrollments.push(data as AcademicClassStudent);
+                }
             }
+            
+            // Update local state with new enrollments
+            if (newEnrollments.length > 0) {
+                setAcademicClassStudents(prev => [...prev, ...newEnrollments]);
+            }
+            
             addToast('Class enrollment updated.', 'success');
             return true;
         } catch (e: any) {
@@ -4759,6 +4811,8 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
                                         handleDeleteCalendarEvent,
                                         handleNavigation: handleAINavigation,
                                         handleInviteUser,
+                                        handleUpdateUser,
+                                        handleDeleteUser,
                                         handleDeactivateUser,
                                         handleUpdateUserCampus,
                                         handleSaveRole,
@@ -5005,6 +5059,8 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
                                     handleDeleteCalendarEvent,
                                     handleNavigation: handleAINavigation,
                                     handleInviteUser,
+                                    handleUpdateUser,
+                                    handleDeleteUser,
                                     handleDeactivateUser,
                                     handleUpdateUserCampus,
                                     handleSaveRole,
