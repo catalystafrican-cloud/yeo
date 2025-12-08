@@ -304,8 +304,15 @@ export function parseCsv(text: string): any[] {
     throw new Error('CSV file must have a header row and at least one data row.');
   }
 
-  // Parse headers
-  const headers = lines[0].split(',').map(h => h.trim());
+  // Parse headers - handle quoted strings properly
+  const headerValues = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+  const headers = headerValues.map(h => {
+    let value = h.trim();
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1).replace(/""/g, '"');
+    }
+    return value;
+  });
 
   // Parse data rows
   const data = lines.slice(1).map(line => {
@@ -381,8 +388,11 @@ export function transformDataWithMapping(data: any[], mappings: ColumnMapping[])
 }
 
 /**
- * Convert CSV row index (0-based) to display row number (1-based, accounting for header)
+ * Convert validation error display row number (1-based with header at row 1) 
+ * to data array index (0-based)
+ * @param displayRow - Row number from validation error (e.g., 2 for first data row)
+ * @returns Zero-based index in the data array
  */
-export function csvRowToIndex(row: number): number {
-  return row - 2; // row is 1-based with header at row 1, so data starts at row 2
+export function displayRowToDataIndex(displayRow: number): number {
+  return displayRow - 2; // displayRow is 1-based with header at row 1, so data starts at row 2
 }

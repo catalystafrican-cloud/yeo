@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { DownloadIcon, UploadCloudIcon, CloseIcon } from './common/icons';
+import { DownloadIcon, UploadCloudIcon } from './common/icons';
 import Spinner from './common/Spinner';
 import type { FeeItem, StudentInvoice, BaseDataObject, Term, Student } from '../types';
 import {
@@ -13,7 +13,7 @@ import {
   validateCsvData,
   autoDetectMapping,
   transformDataWithMapping,
-  csvRowToIndex,
+  displayRowToDataIndex,
   type FeeItemFieldConfig,
   type InvoiceFieldConfig,
   type CsvValidationError,
@@ -390,8 +390,9 @@ const FeesCsvManager: React.FC<FeesCsvManagerProps> = ({
 
     setIsImporting(true);
 
-    const errorRows = new Set(validationErrors.map(e => csvRowToIndex(e.row)));
-    const validData = pendingData.filter((_, index) => !errorRows.has(index));
+    // Convert display row numbers to data array indices
+    const errorIndices = new Set(validationErrors.map(e => displayRowToDataIndex(e.row)));
+    const validData = pendingData.filter((_, index) => !errorIndices.has(index));
 
     setValidationErrors(null);
     setValidationStats(null);

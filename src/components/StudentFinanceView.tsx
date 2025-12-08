@@ -589,6 +589,11 @@ const StudentFinanceView: React.FC<{
         const schoolId = userProfile.school_id;
         
         for (const fee of fees) {
+            // Validate required fields
+            if (!fee.name || !fee.amount) {
+                continue; // Skip invalid fees
+            }
+
             const feeData = {
                 school_id: schoolId,
                 name: fee.name,
@@ -600,7 +605,7 @@ const StudentFinanceView: React.FC<{
             };
 
             // Check if fee with same name exists (update) or create new
-            const existing = feeItems.find(f => f.name.toLowerCase() === feeData.name?.toLowerCase());
+            const existing = feeItems.find(f => f.name?.toLowerCase() === feeData.name.toLowerCase());
             if (existing) {
                 await supabase.from('fee_items').update(feeData).eq('id', existing.id);
             } else {
@@ -615,6 +620,14 @@ const StudentFinanceView: React.FC<{
 
     const handleImportInvoices = async (invoicesData: Partial<StudentInvoice>[]) => {
         const schoolId = userProfile.school_id;
+        
+        // Validate we have at least one term
+        if (!terms || terms.length === 0) {
+            addToast('Cannot import invoices: No terms available. Please create at least one term first.', 'error');
+            return;
+        }
+
+        const defaultTermId = terms[0].id;
         
         for (const invData of invoicesData) {
             // Find student by admission number or name
@@ -633,7 +646,7 @@ const StudentFinanceView: React.FC<{
             const invoiceData = {
                 school_id: schoolId,
                 student_id: student.id,
-                term_id: invData.term_id || terms[0]?.id, // Use first term if not specified
+                term_id: invData.term_id || defaultTermId,
                 invoice_number: invData.invoice_number || `INV-${Date.now()}-${student.id}`,
                 total_amount: Number(invData.total_amount),
                 amount_paid: Number(invData.amount_paid || 0),
