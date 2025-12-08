@@ -11,12 +11,23 @@ export interface ValidationError {
 }
 
 /**
+ * Email validation regex - shared between client and server
+ */
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
  * Validates an email address format
  */
 export function isValidEmail(email: string): boolean {
   if (!email || email.trim() === '') return true; // Email is optional
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
+  return EMAIL_REGEX.test(email.trim());
+}
+
+/**
+ * Extracts email from student object (case-insensitive)
+ */
+export function extractEmail(student: any): string {
+  return (student.email || student.Email || student.EMAIL || '').trim();
 }
 
 /**
@@ -68,6 +79,21 @@ export function isValidPhoneNumber(phone: string): { valid: boolean; error?: str
 }
 
 /**
+ * Converts array index to CSV row number
+ * (accounts for 1-based row numbering and header row)
+ */
+export function indexToCsvRow(index: number): number {
+  return index + 2; // +2 because row 1 is header, array is 0-indexed
+}
+
+/**
+ * Converts CSV row number back to array index
+ */
+export function csvRowToIndex(row: number): number {
+  return row - 2;
+}
+
+/**
  * Validates a single student row from CSV
  */
 export function validateStudentRow(
@@ -75,12 +101,13 @@ export function validateStudentRow(
   rowIndex: number
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const studentName = student.name || `Row ${rowIndex + 2}`; // +2 because row 1 is header, array is 0-indexed
+  const studentName = student.name || `Row ${indexToCsvRow(rowIndex)}`;
+  const csvRow = indexToCsvRow(rowIndex);
   
   // Validate required field: name
   if (!student.name || student.name.trim() === '') {
     errors.push({
-      row: rowIndex + 2,
+      row: csvRow,
       field: 'name',
       value: '',
       message: 'Name is required',
@@ -89,21 +116,15 @@ export function validateStudentRow(
   }
   
   // Validate email if provided
-  const emailFields = ['email', 'Email', 'EMAIL'];
-  for (const field of emailFields) {
-    if (student[field]) {
-      const email = student[field];
-      if (!isValidEmail(email)) {
-        errors.push({
-          row: rowIndex + 2,
-          field: 'email',
-          value: email,
-          message: 'Invalid email format',
-          studentName
-        });
-      }
-      break; // Only validate the first email field found
-    }
+  const email = extractEmail(student);
+  if (email && !isValidEmail(email)) {
+    errors.push({
+      row: csvRow,
+      field: 'email',
+      value: email,
+      message: 'Invalid email format',
+      studentName
+    });
   }
   
   // Validate parent phone numbers
@@ -120,7 +141,7 @@ export function validateStudentRow(
       const validation = isValidPhoneNumber(phone);
       if (!validation.valid) {
         errors.push({
-          row: rowIndex + 2,
+          row: csvRow,
           field: field,
           value: phone,
           message: `Phone number ${validation.error}`,
@@ -149,7 +170,7 @@ export function validateStudentData(students: any[]): {
     const errors = validateStudentRow(student, index);
     if (errors.length > 0) {
       allErrors.push(...errors);
-      rowsWithErrors.add(index + 2); // +2 for actual row number in CSV
+      rowsWithErrors.add(indexToCsvRow(index));
     }
   });
   

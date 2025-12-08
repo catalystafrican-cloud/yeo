@@ -11,6 +11,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Shared validation constants and helpers
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function extractEmail(student: any): string {
+  return (student.email || student.Email || student.EMAIL || '').trim();
+}
+
+function validateEmail(email: string): boolean {
+  if (!email) return true;
+  return EMAIL_REGEX.test(email);
+}
+
 serve(async (req) => {
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
@@ -59,17 +71,14 @@ serve(async (req) => {
 
                 // Server-side validation for data quality
                 // Validate email format if provided
-                const providedEmail = (student.email || student.Email || student.EMAIL || '').trim();
-                if (providedEmail) {
-                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    if (!emailRegex.test(providedEmail)) {
-                        results.push({ 
-                            name: studentName, 
-                            status: 'Failed', 
-                            error: `Invalid email format: "${providedEmail}"` 
-                        });
-                        continue;
-                    }
+                const providedEmail = extractEmail(student);
+                if (providedEmail && !validateEmail(providedEmail)) {
+                    results.push({ 
+                        name: studentName, 
+                        status: 'Failed', 
+                        error: `Invalid email format: "${providedEmail}"` 
+                    });
+                    continue;
                 }
 
                 // Validate phone numbers if provided

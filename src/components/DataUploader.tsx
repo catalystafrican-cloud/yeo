@@ -4,7 +4,7 @@ import { DownloadIcon, UploadCloudIcon } from './common/icons';
 import Spinner from './common/Spinner';
 import type { CreatedCredential } from '../types';
 import { exportToCsv } from '../utils/export';
-import { validateStudentData, formatValidationErrors, type ValidationError } from '../utils/validation';
+import { validateStudentData, csvRowToIndex, type ValidationError } from '../utils/validation';
 
 interface DataUploaderProps {
   onBulkAddStudents: (students: any[]) => Promise<{ success: boolean; message: string; credentials?: CreatedCredential[] }>;
@@ -232,8 +232,8 @@ const DataUploader: React.FC<DataUploaderProps> = ({ onBulkAddStudents, addToast
         
         setIsLoading(true);
         
-        // Filter out rows with errors
-        const errorRows = new Set(validationErrors.map(e => e.row - 2)); // Convert back to 0-indexed
+        // Filter out rows with errors using helper function
+        const errorRows = new Set(validationErrors.map(e => csvRowToIndex(e.row)));
         const validStudents = pendingStudentsData.filter((_, index) => !errorRows.has(index));
         
         // Clear validation state
