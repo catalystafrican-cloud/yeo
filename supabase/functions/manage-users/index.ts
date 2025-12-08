@@ -12,6 +12,9 @@ const corsHeaders = {
 };
 
 // Shared validation constants and helpers
+// Note: These are duplicated from src/utils/validation.ts because Supabase Edge Functions
+// use Deno with URL-based imports and cannot directly import from the local TypeScript codebase.
+// Keep these in sync with the frontend validation module.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function extractEmail(student: any): string {
