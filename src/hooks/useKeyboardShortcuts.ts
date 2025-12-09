@@ -37,7 +37,7 @@ export const useKeyboardShortcuts = (
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
-        target.contentEditable === 'true'
+        target.isContentEditable
       ) {
         // Exception: Allow Escape key to work in input fields
         if (event.key !== 'Escape') {
