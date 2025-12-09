@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.zero_score_entries (
     student_id INTEGER REFERENCES public.students(id) ON DELETE CASCADE,
     teacher_user_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
     component_name TEXT, -- Which component had zero (CA, Exam, etc.)
-    total_score NUMERIC DEFAULT 0,
+    total_score NUMERIC NOT NULL, -- Explicitly record zero, no default
     teacher_comment TEXT,
     entry_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     reviewed BOOLEAN DEFAULT FALSE,

@@ -3781,19 +3781,19 @@ const App: React.FC = () => {
             }
             
             // Detect zero scores and log them for admin/team leader review
-            const zeroScoreEntries: any[] = [];
+            const zeroScoreEntries: Omit<ZeroScoreEntry, 'id' | 'created_at' | 'reviewed' | 'reviewed_by' | 'reviewed_at' | 'review_notes'>[] = [];
             const staffProfile = userProfile as UserProfile;
             
             for (const score of scores) {
-                // Check if any component scores are zero or if total score is zero
+                // Check if any component scores are explicitly zero (not undefined/null)
                 const componentScores = score.component_scores || {};
-                const hasZeroComponent = Object.entries(componentScores).some(([name, value]) => value === 0);
-                const hasZeroTotal = score.total_score === 0;
+                const hasZeroComponent = Object.entries(componentScores).some(([name, value]) => value === 0 && value !== undefined && value !== null);
+                const hasZeroTotal = score.total_score === 0 && score.total_score !== undefined && score.total_score !== null;
                 
                 if (hasZeroComponent || hasZeroTotal) {
-                    // Find which component(s) have zero
+                    // Find which component(s) have explicit zero
                     const zeroComponents = Object.entries(componentScores)
-                        .filter(([_, value]) => value === 0)
+                        .filter(([_, value]) => value === 0 && value !== undefined && value !== null)
                         .map(([name, _]) => name);
                     
                     // Create entry for each zero component, or one for zero total if no components

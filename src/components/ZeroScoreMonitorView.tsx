@@ -99,7 +99,10 @@ const ZeroScoreMonitorView: React.FC<ZeroScoreMonitorViewProps> = ({ userProfile
 
         // Filter by term
         if (filterTerm !== 'all') {
-            filtered = filtered.filter(e => e.term_id.toString() === filterTerm);
+            const termId = parseInt(filterTerm, 10);
+            if (!isNaN(termId)) {
+                filtered = filtered.filter(e => e.term_id === termId);
+            }
         }
 
         // Filter by date range
@@ -437,7 +440,7 @@ const ZeroScoreMonitorView: React.FC<ZeroScoreMonitorViewProps> = ({ userProfile
                                             {selectedEntry.review_notes || 'No notes provided'}
                                         </p>
                                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                                            Reviewed on {new Date(selectedEntry.reviewed_at!).toLocaleString()}
+                                            Reviewed on {selectedEntry.reviewed_at ? new Date(selectedEntry.reviewed_at).toLocaleString() : 'Unknown'}
                                         </p>
                                     </div>
                                 )}
