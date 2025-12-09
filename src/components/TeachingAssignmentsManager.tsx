@@ -6,7 +6,7 @@ import { PlusCircleIcon, SearchIcon, TrashIcon, EditIcon } from './common/icons'
 import SearchableSelect from './common/SearchableSelect';
 import { aiClient } from '../services/aiClient';
 import { textFromGemini } from '../utils/ai';
-import { supabase } from '../offline/client';
+import { supa as supabase } from '../offline/client';
 
 interface WorkloadAnalysis {
     teacherId: string;
