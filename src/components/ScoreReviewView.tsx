@@ -9,7 +9,7 @@ import type {
     AcademicClassStudent 
 } from '../types';
 import Spinner from './common/Spinner';
-import { SearchIcon, FilterIcon, EditIcon, CheckCircleIcon, XCircleIcon, UserIcon } from './common/icons';
+import { SearchIcon, FilterIcon, EditIcon, CheckCircleIcon, XCircleIcon, UserCircleIcon } from './common/icons';
 
 interface ScoreReviewViewProps {
     scoreEntries: ScoreEntry[];
@@ -411,7 +411,7 @@ const ScoreReviewView: React.FC<ScoreReviewViewProps> = ({
                                             </td>
                                             <td className="px-4 py-3 text-sm">
                                                 <div className="flex items-center gap-2">
-                                                    <UserIcon className="w-4 h-4 text-slate-400" />
+                                                    <UserCircleIcon className="w-4 h-4 text-slate-400" />
                                                     <div>
                                                         <div className="text-slate-900 dark:text-white">
                                                             {score.entered_by?.name || 'Unknown'}
