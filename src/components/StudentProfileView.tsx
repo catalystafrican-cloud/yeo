@@ -88,15 +88,16 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     
     // Filter reports based on viewer type
     const visibleReports = useMemo(() => {
-        const studentReports = reports.filter(r => r.involved_students.includes(student.id));
+        // First, filter to only show reports involving this student
+        const studentInvolvedReports = reports.filter(r => r.involved_students.includes(student.id));
         
-        // If viewer is a student, filter to only show student-visible report types
+        // If viewer is a student, further filter to only show student-visible report types
         if (isStudentViewer) {
-            return studentReports.filter(r => STUDENT_VISIBLE_REPORT_TYPES.includes(r.report_type));
+            return studentInvolvedReports.filter(r => STUDENT_VISIBLE_REPORT_TYPES.includes(r.report_type));
         }
         
-        // Staff can see all reports
-        return studentReports;
+        // Staff can see all reports involving this student
+        return studentInvolvedReports;
     }, [reports, student.id, isStudentViewer]);
     
     const studentReports = studentTermReports.filter(r => r.student_id === student.id);
@@ -488,12 +489,12 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                                    <EditableField label="Parent's Phone 2" value={formData.parent_phone_number_2 || ''} isEditing={isEditing} onChange={v => setFormData(p => ({...p, parent_phone_number_2: v}))} />
                                    <EditableField label="Address" value={formData.address || ''} isEditing={isEditing} onChange={v => setFormData(p => ({...p, address: v}))} type="textarea" className="col-span-full" />
                                 </div>
-                             </div>
-                             <div className="bg-red-500/10 p-4 rounded-lg text-center">
-                                 <h4 className="font-semibold text-red-700 dark:text-red-300 mb-1">Reports</h4>
-                                 <p className="text-4xl font-bold text-red-600 dark:text-red-400">{visibleReports.length}</p>
                             </div>
-                             <div className="bg-green-500/10 p-4 rounded-lg text-center">
+                            <div className="bg-red-500/10 p-4 rounded-lg text-center">
+                                <h4 className="font-semibold text-red-700 dark:text-red-300 mb-1">Reports</h4>
+                                <p className="text-4xl font-bold text-red-600 dark:text-red-400">{visibleReports.length}</p>
+                            </div>
+                            <div className="bg-green-500/10 p-4 rounded-lg text-center">
                                  <h4 className="font-semibold text-green-700 dark:text-green-300 mb-1">Recognitions</h4>
                                  <p className="text-4xl font-bold text-green-600 dark:text-green-400">{positiveRecords.length}</p>
                             </div>
