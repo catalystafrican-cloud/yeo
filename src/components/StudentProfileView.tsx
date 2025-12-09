@@ -36,6 +36,11 @@ interface StudentProfileViewProps {
 
 type ProfileTab = 'Overview' | 'Conduct' | 'Reports' | 'Term Reports' | 'Positive Behavior' | 'Spotlight Awards' | 'AI Insights';
 
+// Define which report types are visible to students
+// Currently, all ReportType values are internal staff reports
+// Students should only see Positive Behavior records (which are in a separate table/tab)
+const STUDENT_VISIBLE_REPORT_TYPES: ReportType[] = [];
+
 const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     student,
     reports,
@@ -77,6 +82,23 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState<Partial<Student>>({});
+    
+    // Determine if the current viewer is a student
+    const isStudentViewer = currentUser.role === 'Student';
+    
+    // Filter reports based on viewer type
+    const visibleReports = useMemo(() => {
+        // First, filter to only show reports involving this student
+        const studentInvolvedReports = reports.filter(r => r.involved_students.includes(student.id));
+        
+        // If viewer is a student, further filter to only show student-visible report types
+        if (isStudentViewer) {
+            return studentInvolvedReports.filter(r => STUDENT_VISIBLE_REPORT_TYPES.includes(r.report_type));
+        }
+        
+        // Staff can see all reports involving this student
+        return studentInvolvedReports;
+    }, [reports, student.id, isStudentViewer]);
     
     const studentReports = studentTermReports.filter(r => r.student_id === student.id);
     
@@ -325,7 +347,7 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
             case 'Reports':
                 return (
                     <div className="space-y-4">
-                        {reports.length > 0 ? reports.map(report => (
+                        {visibleReports.length > 0 ? visibleReports.map(report => (
                             <div key={report.id} className={`p-4 border rounded-lg ${report.archived ? 'bg-slate-100 dark:bg-slate-900 opacity-60 border-slate-200' : 'bg-slate-500/10 border-slate-200/60 dark:border-slate-700/60'}`}>
                                 <div className="flex justify-between">
                                     <p className="font-semibold text-slate-800 dark:text-white">{report.report_type} Report #{report.id}</p>
@@ -340,7 +362,13 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                                 )}
                                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">By {report.author?.name || 'Unknown User'} on {new Date(report.created_at).toLocaleDateString()}</p>
                             </div>
-                        )) : <p className="text-slate-600 dark:text-slate-400">No reports involving this student.</p>}
+                        )) : (
+                            <p className="text-slate-600 dark:text-slate-400">
+                                {isStudentViewer 
+                                    ? "No reports available. Check the 'Positive Behavior' tab for recognitions." 
+                                    : "No reports involving this student."}
+                            </p>
+                        )}
                     </div>
                 );
             case 'Term Reports':
@@ -462,11 +490,11 @@ const StudentProfileView: React.FC<StudentProfileViewProps> = ({
                                    <EditableField label="Address" value={formData.address || ''} isEditing={isEditing} onChange={v => setFormData(p => ({...p, address: v}))} type="textarea" className="col-span-full" />
                                 </div>
                             </div>
-                             <div className="bg-red-500/10 p-4 rounded-lg text-center">
-                                 <h4 className="font-semibold text-red-700 dark:text-red-300 mb-1">Reports</h4>
-                                 <p className="text-4xl font-bold text-red-600 dark:text-red-400">{reports.length}</p>
+                            <div className="bg-red-500/10 p-4 rounded-lg text-center">
+                                <h4 className="font-semibold text-red-700 dark:text-red-300 mb-1">Reports</h4>
+                                <p className="text-4xl font-bold text-red-600 dark:text-red-400">{visibleReports.length}</p>
                             </div>
-                             <div className="bg-green-500/10 p-4 rounded-lg text-center">
+                            <div className="bg-green-500/10 p-4 rounded-lg text-center">
                                  <h4 className="font-semibold text-green-700 dark:text-green-300 mb-1">Recognitions</h4>
                                  <p className="text-4xl font-bold text-green-600 dark:text-green-400">{positiveRecords.length}</p>
                             </div>
