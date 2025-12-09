@@ -466,6 +466,22 @@ const App: React.FC = () => {
         }, durationMs);
     };
 
+    // Audit logging helper function
+    const logAuditAction = useCallback(async (action: string, details: Record<string, unknown> = {}) => {
+        if (!userProfile || !supabase) return;
+        try {
+            await supabase.from('audit_log').insert({
+                school_id: userProfile.school_id,
+                actor_user_id: userProfile.id,
+                action,
+                details
+            });
+        } catch (error) {
+            console.error('Failed to log audit action:', error);
+            // Don't show error to user - audit logging failure shouldn't disrupt UX
+        }
+    }, [userProfile, supabase]);
+
     const handleLogout = useCallback(async () => {
         if (!supabase) return;
         try {
@@ -2316,12 +2332,20 @@ const App: React.FC = () => {
             // Update local state
             setStudents(prev => prev.filter(s => s.id !== studentId));
             addToast('Student deleted successfully.', 'success');
+            
+            // Log audit action
+            await logAuditAction('student_deleted', {
+                student_id: studentId,
+                student_name: student?.name,
+                admission_number: student?.admission_number
+            });
+            
             return true;
         } catch (e: any) {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [students, addToast]);
+    }, [students, addToast, logAuditAction]);
 
     const handleBulkDeleteStudents = useCallback(async (studentIds: number[]): Promise<{ success: boolean; deleted: number; total: number }> => {
         try {
@@ -2460,8 +2484,16 @@ const App: React.FC = () => {
         }
         setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...studentData } : s));
         addToast('Student updated.', 'success');
+        
+        // Log audit action
+        await logAuditAction('student_updated', {
+            student_id: studentId,
+            updated_fields: Object.keys(studentData),
+            changes: studentData
+        });
+        
         return true;
-    }, [addToast]);
+    }, [addToast, logAuditAction]);
 
     const handleCreateSIP = useCallback(async (studentId: number, goals: string[]) => {
         if (!userProfile) return false;
@@ -2869,10 +2901,25 @@ const App: React.FC = () => {
                 const { error } = await Offline.update('terms', term, { id: term.id });
                 if (error) { addToast(error.message, 'error'); return false; }
                 setTerms(prev => prev.map(t => t.id === term.id ? { ...t, ...term } as Term : t));
+                
+                // Log audit action
+                await logAuditAction('term_updated', {
+                    term_id: term.id,
+                    session_label: term.session_label,
+                    term_label: term.term_label,
+                    is_active: term.is_active
+                });
             } else {
                 const { data, error } = await Offline.insert('terms', { ...term, school_id: userProfile.school_id });
                 if (error || !data) { addToast(error?.message || 'Failed to create term', 'error'); return false; }
                 setTerms(prev => [...prev, data as Term]);
+                
+                // Log audit action
+                await logAuditAction('term_created', {
+                    term_id: data.id,
+                    session_label: term.session_label,
+                    term_label: term.term_label
+                });
             }
             addToast('Term saved.', 'success');
             return true;
@@ -2880,7 +2927,7 @@ const App: React.FC = () => {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [userProfile, addToast]);
+    }, [userProfile, addToast, logAuditAction]);
 
     const handleDeleteTerm = useCallback(async (termId: number): Promise<boolean> => {
         try {
@@ -2937,10 +2984,29 @@ const App: React.FC = () => {
                 const { error } = await Offline.update('teaching_assignments', assignment, { id: assignment.id });
                 if (error) { addToast(error.message, 'error'); return false; }
                 setAcademicAssignments(prev => prev.map(a => a.id === assignment.id ? { ...a, ...assignment } as AcademicTeachingAssignment : a));
+                
+                // Log audit action
+                await logAuditAction('teaching_assignment_updated', {
+                    assignment_id: assignment.id,
+                    updated_fields: Object.keys(assignment)
+                });
             } else {
+                // Validate that term_id is provided
+                if (!assignment.term_id) {
+                    addToast('Please select a term for the assignment', 'error');
+                    return false;
+                }
                 const { data, error } = await Offline.insert('teaching_assignments', { ...assignment, school_id: userProfile.school_id });
                 if (error || !data) { addToast(error?.message || 'Failed to create assignment', 'error'); return false; }
                 setAcademicAssignments(prev => [...prev, data as AcademicTeachingAssignment]);
+                
+                // Log audit action
+                await logAuditAction('teaching_assignment_created', {
+                    assignment_id: data.id,
+                    term_id: assignment.term_id,
+                    subject_name: assignment.subject_name,
+                    teacher_id: assignment.teacher_user_id
+                });
             }
             addToast('Teaching assignment saved.', 'success');
             return true;
@@ -2948,20 +3014,30 @@ const App: React.FC = () => {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [userProfile, addToast]);
+    }, [userProfile, addToast, logAuditAction]);
 
     const handleDeleteAcademicAssignment = useCallback(async (assignmentId: number): Promise<boolean> => {
         try {
+            const assignment = academicAssignments.find(a => a.id === assignmentId);
+            
             const { error } = await Offline.del('teaching_assignments', { id: assignmentId });
             if (error) { addToast(error.message, 'error'); return false; }
             setAcademicAssignments(prev => prev.filter(a => a.id !== assignmentId));
             addToast('Teaching assignment deleted.', 'success');
+            
+            // Log audit action
+            await logAuditAction('teaching_assignment_deleted', {
+                assignment_id: assignmentId,
+                subject_name: assignment?.subject_name,
+                teacher_id: assignment?.teacher_user_id
+            });
+            
             return true;
         } catch (e: any) {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [addToast]);
+    }, [addToast, logAuditAction, academicAssignments]);
 
     // ... (Calendar handlers)
      const handleSaveCalendarEvent = useCallback(async (event: any) => {
@@ -3006,15 +3082,25 @@ const App: React.FC = () => {
             }
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...userData } : u));
             addToast('User updated successfully.', 'success');
+            
+            // Log audit action
+            await logAuditAction('user_updated', {
+                user_id: userId,
+                updated_fields: Object.keys(userData),
+                changes: userData
+            });
+            
             return true;
         } catch (e: any) {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [addToast]);
+    }, [addToast, logAuditAction]);
 
     const handleDeleteUser = useCallback(async (userId: string): Promise<boolean> => {
         try {
+            const userToDelete = users.find(u => u.id === userId);
+            
             // Note: This should also handle auth deletion via Edge Function
             const { error } = await Offline.del('user_profiles', { id: userId });
             if (error) {
@@ -3023,12 +3109,20 @@ const App: React.FC = () => {
             }
             setUsers(prev => prev.filter(u => u.id !== userId));
             addToast('User deleted successfully.', 'success');
+            
+            // Log audit action
+            await logAuditAction('user_deleted', {
+                user_id: userId,
+                user_name: userToDelete?.name,
+                user_role: userToDelete?.role
+            });
+            
             return true;
         } catch (e: any) {
             addToast(`Error: ${e.message}`, 'error');
             return false;
         }
-    }, [addToast]);
+    }, [addToast, logAuditAction, users]);
 
     const handleDeactivateUser = useCallback(async (userId: string, isActive: boolean) => {
         // Logic to toggle active state in DB/Auth
@@ -3294,6 +3388,13 @@ const App: React.FC = () => {
         const staffProfile = userProfile as UserProfile;
         
         try {
+            // Get the active term
+            const activeTerm = terms.find(t => t.is_active);
+            if (!activeTerm) {
+                addToast('No active term found. Please set an active term first.', 'error');
+                return false;
+            }
+            
             // Look up subject name from subject_id
             const subject = allSubjects.find(s => s.id === assignmentData.subject_id);
             if (!subject) {
@@ -3307,7 +3408,8 @@ const App: React.FC = () => {
                 teacher_user_id: assignmentData.teacher_user_id,
                 subject_name: subject.name,
                 academic_class_id: assignmentData.class_id,
-                school_id: staffProfile.school_id
+                school_id: staffProfile.school_id,
+                term_id: activeTerm.id
             });
             
             if (assignmentError || !assignment) {
@@ -3337,7 +3439,7 @@ const App: React.FC = () => {
             addToast(`Error creating class assignment: ${error.message}`, 'error');
             return false;
         }
-    }, [userProfile, userType, addToast, allSubjects, refreshClassGroups]);
+    }, [userProfile, userType, addToast, allSubjects, refreshClassGroups, terms]);
 
     const handleDeleteClassAssignment = useCallback(async (groupId: number): Promise<boolean> => {
         try {
@@ -4248,6 +4350,11 @@ const App: React.FC = () => {
         if (!userProfile) return false;
         try {
             for (const assignment of assignments) {
+                // Validate that term_id exists in the assignment data
+                if (!assignment.term_id) {
+                    addToast('Invalid legacy assignment: missing term_id', 'error');
+                    return false;
+                }
                 const { error } = await Offline.insert('teaching_assignments', {
                     ...assignment,
                     school_id: userProfile.school_id,
