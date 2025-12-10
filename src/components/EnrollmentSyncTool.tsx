@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Term } from '../types';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import Spinner from './common/Spinner';
 import { CheckCircleIcon, RefreshIcon, AlertCircleIcon } from './common/icons';
 
