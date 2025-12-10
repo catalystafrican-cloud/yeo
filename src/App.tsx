@@ -1210,14 +1210,14 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const currentHash = decodeURIComponent(window.location.hash.substring(1));
-        let targetView = currentView || VIEWS.DASHBOARD || 'Dashboard';
+        let targetView = currentView || VIEWS.DASHBOARD;
         
         // Handle leading slash if present - with safety checks
         if (targetView && typeof targetView === 'string' && targetView.startsWith('/')) {
             targetView = targetView.substring(1);
         }
-        let targetHash = currentHash || '';
-        if (targetHash && typeof targetHash === 'string' && targetHash.startsWith('/')) {
+        let targetHash = currentHash;
+        if (targetHash && targetHash.startsWith('/')) {
             targetHash = targetHash.substring(1);
         }
         
