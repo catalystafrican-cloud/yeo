@@ -1775,6 +1775,7 @@ const App: React.FC = () => {
 
     // ... (Handlers for staff awards, team feedback, etc.) ...
      const handleGenerateStaffAwards = useCallback(async () => {
+        const aiClient = getAIClient();
         if (!aiClient) return;
         addToast('Analyzing staff performance...', 'info');
         // Simplified mock generation
@@ -1936,6 +1937,7 @@ const App: React.FC = () => {
     }, [addToast]);
 
     const handleProcessDailyDigest = useCallback(async (): Promise<DailyBriefing | null> => {
+        const aiClient = getAIClient();
         if (!aiClient) return null;
         
         try {
@@ -2693,6 +2695,7 @@ const App: React.FC = () => {
     }, [userProfile, positiveRecords, addToast, session, fetchData, schoolSettings]);
 
     const handleGenerateStudentInsight = useCallback(async (studentId: number): Promise<any | null> => {
+        const aiClient = getAIClient();
         if (!aiClient) return null;
         
         // Check if AI is in cooldown
@@ -2702,11 +2705,6 @@ const App: React.FC = () => {
         }
         
         try {
-            const aiClient = getAIClient();
-            if (!aiClient) {
-                addToast('AI client not configured', 'error');
-                return null;
-            }
 
             const student = students.find(s => s.id === studentId);
             if (!student) return null;
@@ -3796,9 +3794,10 @@ const App: React.FC = () => {
 
     // ... (Other Lesson Plan Handlers: analyze, copy, approve) ...
     const handleAnalyzeLessonPlan = useCallback(async (planId: number) => {
+        const aiClient = getAIClient();
         if (!aiClient) return null;
         return { has_objectives: true, has_assessment: true, clarity_score: 8, suggestions: ["Add more details"] };
-    }, [aiClient]);
+    }, []);
 
     const handleCopyLessonPlan = useCallback(async (sourcePlan: LessonPlan, targetEntityIds: number[]) => {
         if (!userProfile) return false;
@@ -4732,6 +4731,7 @@ const App: React.FC = () => {
 
     const handleGenerateImprovementPlan = useCallback(async (): Promise<any> => {
         if (!userProfile) return null;
+        const aiClient = getAIClient();
         if (!aiClient || !session) {
             addToast("AI client is not configured.", "error");
             return null;
@@ -4822,10 +4822,11 @@ Generate a JSON object with:
             }
             return null;
         }
-    }, [userProfile, aiClient, session, isAiInCooldown, addToast, reports, tasks, atRiskStudents, students, positiveRecords, lessonPlans, schoolSettings, handleUpdateSchoolSettings, fetchData, isRateLimitError, setAiCooldown]);
+    }, [userProfile, session, isAiInCooldown, addToast, reports, tasks, atRiskStudents, students, positiveRecords, lessonPlans, schoolSettings, handleUpdateSchoolSettings, fetchData, isRateLimitError, setAiCooldown]);
 
     const handleGenerateCoverageDeviationReport = useCallback(async (): Promise<any> => {
         if (!userProfile) return null;
+        const aiClient = getAIClient();
         if (!aiClient || !session) {
             addToast("AI client is not configured.", "error");
             return null;
