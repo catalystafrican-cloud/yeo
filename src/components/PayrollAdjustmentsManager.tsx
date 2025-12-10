@@ -136,7 +136,7 @@ const PayrollAdjustmentsManager: React.FC<PayrollAdjustmentsManagerProps> = ({ u
                 addToast(`Failed to delete: ${userFriendlyMessage}`, 'error');
             } else {
                 addToast('Adjustment deleted.', 'success');
-                setSelectedIds(prev => { prev.delete(id); return new Set(prev); });
+                setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
                 await fetchData();
             }
         }
@@ -195,7 +195,8 @@ const PayrollAdjustmentsManager: React.FC<PayrollAdjustmentsManagerProps> = ({ u
 
     // Selection handlers
     const handleSelectAll = () => {
-        if (selectedIds.size === paginatedAdjustments.length) {
+        const allPageItemsSelected = paginatedAdjustments.every(adj => selectedIds.has(adj.id));
+        if (allPageItemsSelected) {
             setSelectedIds(new Set());
         } else {
             setSelectedIds(new Set(paginatedAdjustments.map(adj => adj.id)));
@@ -313,7 +314,7 @@ const PayrollAdjustmentsManager: React.FC<PayrollAdjustmentsManagerProps> = ({ u
                         <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
                             <input 
                                 type="checkbox"
-                                checked={selectedIds.size === paginatedAdjustments.length && paginatedAdjustments.length > 0}
+                                checked={paginatedAdjustments.length > 0 && paginatedAdjustments.every(adj => selectedIds.has(adj.id))}
                                 onChange={handleSelectAll}
                                 className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
                             />
@@ -410,7 +411,7 @@ const AdjustmentForm: React.FC<{
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (NGN)" required className="p-2 border rounded-md" />
-                <select value={type} onChange={e => setType(e.target.value as any)} className="p-2 border rounded-md">
+                <select value={type} onChange={e => setType(e.target.value as 'addition' | 'deduction')} className="p-2 border rounded-md">
                     <option value="deduction">Deduction</option>
                     <option value="addition">Addition / Reimbursement</option>
                 </select>
@@ -497,7 +498,7 @@ const BulkUpdateForm: React.FC<{
                         {updateType && (
                             <select 
                                 value={type} 
-                                onChange={e => setType(e.target.value as any)} 
+                                onChange={e => setType(e.target.value as 'addition' | 'deduction')} 
                                 className="mt-2 p-2 border rounded-md w-full bg-white dark:bg-slate-800 dark:border-slate-700"
                             >
                                 <option value="deduction">Deduction</option>
