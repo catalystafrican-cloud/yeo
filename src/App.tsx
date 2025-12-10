@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo, Component } from 'react';
 import type { Session, User } from '@supabase/auth-js';
 import { supabaseError } from './services/supabaseClient';
-import { aiClient, aiClientError } from './services/aiClient';
-import { GoogleGenAI, Type } from '@google/genai';
+import { initializeAIClient, getAIClient, getAIClientError } from './services/aiClient';
+import type { OpenAI } from 'openai';
 import { Team, TeamFeedback, TeamPulse, Task, TaskPriority, TaskStatus, ReportType, CoverageStatus, RoleTitle, Student, UserProfile, ReportRecord, ReportComment, Announcement, Notification, ToastMessage, RoleDetails, PositiveBehaviorRecord, StudentAward, StaffAward, AIProfileInsight, AtRiskStudent, Alert, StudentInterventionPlan, SIPLog, SchoolHealthReport, SchoolSettings, PolicyInquiry, LivingPolicySnippet, AtRiskTeacher, InventoryItem, CalendarEvent, LessonPlan, CurriculumReport, LessonPlanAnalysis, DailyBriefing, StudentProfile, TeachingAssignment, BaseDataObject, Survey, SurveyWithQuestions, TeacherRatingWeekly, SuggestedTask, SchoolImprovementPlan, Curriculum, CurriculumWeek, CoverageDeviation, ClassGroup, AttendanceSchedule, AttendanceRecord, UPSSGPTResponse, SchoolConfig, Term, AcademicClass, AcademicTeachingAssignment, GradingScheme, GradingSchemeRule, AcademicClassStudent, ScoreEntry, StudentTermReport, AuditLog, Assessment, AssessmentScore, CoverageVote, RewardStoreItem, PayrollRun, PayrollItem, PayrollAdjustment, Campus, TeacherCheckin, CheckinAnomaly, LeaveType, LeaveRequest, LeaveRequestStatus, TeacherShift, FutureRiskPrediction, AssessmentStructure, SocialMediaAnalytics, SocialAccount, CreatedCredential, NavigationContext, TeacherMood, Order, OrderStatus, StudentTermReportSubject, UserRoleAssignment, StudentFormData, PayrollUpdateData, CommunicationLogData, ZeroScoreEntry } from './types';
 
 import { MOCK_SOCIAL_ACCOUNTS, MOCK_TOUR_CONTENT, MOCK_SOCIAL_ANALYTICS } from './services/mockData';
 import { extractAndParseJson } from './utils/json';
-import { textFromGemini } from './utils/ai';
+import { textFromAI } from './utils/ai';
 import { askUPSSGPT } from './services/upssGPT';
 import { base64ToBlob } from './utils/file';
 import { Offline, supa as supabase, cache } from './offline/client';
@@ -1207,6 +1207,24 @@ const App: React.FC = () => {
         };
     }, [session, addToast]); 
 
+    // --- Initialize AI Client ---
+    useEffect(() => {
+        if (schoolSettings?.ai_settings) {
+            const { openrouter_api_key, default_model } = schoolSettings.ai_settings;
+            if (openrouter_api_key) {
+                console.log('[AI] Initializing AI client with OpenRouter');
+                initializeAIClient(openrouter_api_key, default_model || 'openai/gpt-4o');
+                const error = getAIClientError();
+                if (error) {
+                    console.error('[AI] Failed to initialize AI client:', error);
+                } else {
+                    console.log('[AI] AI client initialized successfully');
+                }
+            } else {
+                console.log('[AI] No API key configured');
+            }
+        }
+    }, [schoolSettings]);
 
     useEffect(() => {
         const currentHash = decodeURIComponent(window.location.hash.substring(1));
@@ -1412,6 +1430,7 @@ const App: React.FC = () => {
     }, [reports, students, booting]);
 
     const analyzeAtRiskStudents = useCallback(async (allStudents: Student[], allReports: ReportRecord[]) => {
+        const aiClient = getAIClient();
         if (!aiClient || allStudents.length === 0 || allReports.length === 0) return;
         
         // Check if AI is in cooldown
@@ -1435,12 +1454,12 @@ const App: React.FC = () => {
             const studentsWithReports = allStudents.filter(s => studentReportMap[s.id]);
             if (studentsWithReports.length === 0) { setAtRiskStudents([]); return; }
             const prompt = `Analyze the following reports to identify at-risk students. Return a JSON array of objects with "studentId" (number), "riskScore" (1-100), and "reasons" (array of short strings). Only include students with a risk score > 60. Students and their associated negative report texts: ${studentsWithReports.map(s => `Student ID ${s.id} (${s.name}):\n- ${studentReportMap[s.id].join('\n- ')}`).join('\n\n')}`;
-            const response = await aiClient.models.generateContent({ 
-                model: 'gemini-2.5-flash', 
-                contents: prompt, 
-                config: { responseMimeType: 'application/json', responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { studentId: { type: Type.NUMBER }, riskScore: { type: Type.NUMBER }, reasons: { type: Type.ARRAY, items: { type: Type.STRING } }, } } } } 
+            const response = await aiClient.chat.completions.create({ 
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
-            const results = extractAndParseJson<{ studentId: number, riskScore: number, reasons: string[] }[]>(textFromGemini(response));
+            const results = extractAndParseJson<{ studentId: number, riskScore: number, reasons: string[] }[]>(textFromAI(response));
             if (results && Array.isArray(results)) {
                 const atRiskData: AtRiskStudent[] = results.map(res => {
                     const student = allStudents.find(s => s.id === res.studentId);
@@ -1455,7 +1474,7 @@ const App: React.FC = () => {
                 addToast('AI service is temporarily busy. Please try again in a few minutes.', 'warning');
             }
         }
-    }, [aiClient, addToast]);
+    }, [addToast, schoolSettings]);
 
     // Generate fallback task suggestions based on user role and context
     const generateFallbackTaskSuggestions = useCallback((allReports: ReportRecord[], userRole: RoleTitle | undefined): SuggestedTask[] => {
@@ -1541,6 +1560,7 @@ const App: React.FC = () => {
     }, [tasks]);
 
     const generateTaskSuggestions = useCallback(async (allReports: ReportRecord[]) => {
+        const aiClient = getAIClient();
         if (!aiClient || allReports.length === 0) return;
         
         // Check if AI is in cooldown
@@ -1560,8 +1580,12 @@ const App: React.FC = () => {
                 return; 
             }
             const prompt = `Analyze these urgent school reports and suggest concrete, actionable tasks. For each report, generate one task. Return a JSON array of objects, each with "reportId" (number), "title" (string, max 50 chars), "description" (string, max 150 chars), "priority" (string: 'High' or 'Critical'), and "suggestedRole" (string, one of: 'Admin', 'Principal', 'Counselor', 'Team Lead', 'Maintenance'). Reports:\n${urgentReports.map(r => `ID ${r.id}: "${r.report_text}" - Summary: ${r.analysis?.summary}`).join('\n')}`;
-            const response = await aiClient.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { reportId: { type: Type.NUMBER }, title: { type: Type.STRING }, description: { type: Type.STRING }, priority: { type: Type.STRING, enum: ['High', 'Critical'] }, suggestedRole: { type: Type.STRING, enum: ['Admin', 'Principal', 'Counselor', 'Team Lead', 'Maintenance'] }, } } } } });
-            const results = extractAndParseJson<Omit<SuggestedTask, 'id'>[]>(textFromGemini(response));
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
+            });
+            const results = extractAndParseJson<Omit<SuggestedTask, 'id'>[]>(textFromAI(response));
             if (results && Array.isArray(results)) {
                 const suggestions: SuggestedTask[] = results.map(res => ({ ...res, id: `sugg-${res.reportId}-${Date.now()}` }));
                 setTaskSuggestions(suggestions);
@@ -1585,7 +1609,7 @@ const App: React.FC = () => {
                 setAreFallbackSuggestions(true);
             }
         }
-    }, [aiClient, tasks, addToast, generateFallbackTaskSuggestions, userProfile]);
+    }, [tasks, addToast, generateFallbackTaskSuggestions, userProfile, schoolSettings]);
 
     const handleGenerateForesight = useCallback(async (question: string): Promise<UPSSGPTResponse | null> => {
         if (!aiClient) { addToast("AI client is not available.", "error"); return null; }
@@ -1651,6 +1675,7 @@ const App: React.FC = () => {
     }, [addToast]);
 
     const handleGenerateHealthReport = useCallback(async () => {
+         const aiClient = getAIClient();
          if (!aiClient || !session) { addToast("AI client is not configured.", "error"); return; }
          addToast("Generating School Health Report...", "info");
          try {
@@ -1661,8 +1686,12 @@ const App: React.FC = () => {
              const averageTeamPulse = teamPulse.length > 0 ? teamPulse.reduce((acc, p) => acc + p.overallScore, 0) / teamPulse.length : 0;
              const context = `Total Reports: ${reportCount}, Task Completion Rate: ${taskCompletionRate.toFixed(1)}%, At-Risk Students: ${atRiskCount}, Positive Behaviors: ${positiveBehaviorCount}, Team Pulse: ${averageTeamPulse.toFixed(1)}`;
              const prompt = `You are an AI school administrator. Generate a "School Health Report" JSON with "overall_score" (0-100), "summary" (string), and "metrics" (array of {metric, score, summary}). Data: ${context}`;
-             const response = await aiClient.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json', responseSchema: { type: Type.OBJECT, properties: { overall_score: { type: Type.NUMBER }, summary: { type: Type.STRING }, metrics: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { metric: { type: Type.STRING }, score: { type: Type.NUMBER }, summary: { type: Type.STRING } }, required: ['metric', 'score', 'summary'] } } }, required: ['overall_score', 'summary', 'metrics'] } } });
-             const reportData = extractAndParseJson<Omit<SchoolHealthReport, 'generated_at'>>(textFromGemini(response));
+             const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
+             });
+             const reportData = extractAndParseJson<Omit<SchoolHealthReport, 'generated_at'>>(textFromAI(response));
              if (!reportData) throw new Error("Invalid AI response");
              const newReport: SchoolHealthReport = { ...reportData, generated_at: new Date().toISOString() };
              await handleUpdateSchoolSettings({ school_documents: { ...schoolSettings?.school_documents, health_report: newReport } });
@@ -1676,7 +1705,7 @@ const App: React.FC = () => {
                  addToast(`Failed: ${e.message}`, 'error');
              }
          }
-    }, [aiClient, session, addToast, reports, tasks, atRiskStudents, positiveRecords, teamPulse, schoolSettings, handleUpdateSchoolSettings, fetchData]);
+    }, [session, addToast, reports, tasks, atRiskStudents, positiveRecords, teamPulse, schoolSettings, handleUpdateSchoolSettings, fetchData]);
 
     // ... (Existing handlers: tasks, announcements, etc.) ...
     const handleUpdateTaskStatus = useCallback(async (taskId: number, status: TaskStatus) => {
