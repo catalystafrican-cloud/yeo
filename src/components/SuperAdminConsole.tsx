@@ -151,10 +151,13 @@ const SuperAdminConsole: React.FC<SuperAdminConsoleProps> = (props) => {
         return tabs.filter(tab => isSuperAdmin || userPermissions.includes(tab.permission));
     }, [userPermissions]);
 
-    const [activeTab, setActiveTab] = useState<AdminTab>(visibleTabs[0]?.name || 'Branding');
-    const [structureSubTab, setStructureSubTab] = useState<'assessment' | 'terms' | 'classes' | 'assignments' | 'subjects' | 'classrooms' | 'arms' | 'enrollment-sync'>('assessment');
+    // Define structure sub-tab type for better maintainability
+    type StructureSubTab = 'assessment' | 'terms' | 'classes' | 'assignments' | 'subjects' | 'classrooms' | 'arms' | 'enrollment_sync';
 
-    const structureSubTabs = [
+    const [activeTab, setActiveTab] = useState<AdminTab>(visibleTabs[0]?.name || 'Branding');
+    const [structureSubTab, setStructureSubTab] = useState<StructureSubTab>('assessment');
+
+    const structureSubTabs: { id: StructureSubTab; label: string }[] = [
         { id: 'assessment' as const, label: 'Assessment Templates' },
         { id: 'terms' as const, label: 'Academic Terms' },
         { id: 'classes' as const, label: 'Academic Classes' },
@@ -162,7 +165,7 @@ const SuperAdminConsole: React.FC<SuperAdminConsoleProps> = (props) => {
         { id: 'subjects' as const, label: 'Subjects' },
         { id: 'classrooms' as const, label: 'Classes' },
         { id: 'arms' as const, label: 'Arms/Streams' },
-        { id: 'enrollment-sync' as const, label: 'Enrollment Sync' },
+        { id: 'enrollment_sync' as const, label: 'Enrollment Sync' },
     ];
 
     const renderContent = () => {
@@ -259,8 +262,12 @@ const SuperAdminConsole: React.FC<SuperAdminConsoleProps> = (props) => {
                             {structureSubTab === 'arms' && (
                                 <ArmsManager arms={arms} onSave={onSaveArm} onDelete={onDeleteArm} />
                             )}
-                            {structureSubTab === 'enrollment-sync' && schoolConfig && (
-                                <EnrollmentSyncTool terms={terms} schoolId={schoolConfig.school_id} />
+                            {structureSubTab === 'enrollment_sync' && (
+                                <EnrollmentSyncTool 
+                                    terms={terms}
+                                    schoolId={schoolConfig?.school_id || 1}
+                                    addToast={addToast}
+                                />
                             )}
                         </div>
                     </div>

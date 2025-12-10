@@ -1,379 +1,366 @@
 -- ============================================
--- Student Enrollment Synchronization System
+-- Enrollment Synchronization System
+-- Resolves dual source of truth between students table and academic_class_students
 -- ============================================
--- This migration implements automatic synchronization between the students table
--- (source of truth for class/arm assignments) and academic_class_students table
--- (term-based enrollment records).
---
--- Key Features:
--- 1. Auto-sync function to enroll students in academic classes matching their class_id/arm_id
--- 2. Trigger to sync enrollment when student class/arm changes
--- 3. Bulk sync function for new terms
--- 4. Manual sync function for admin tools
 
--- ============================================
--- FUNCTION: Sync single student enrollment for a term
--- ============================================
--- Synchronizes a student's enrollment in academic_class_students for a given term
--- based on their class_id and arm_id in the students table.
--- 
--- Parameters:
---   p_student_id: The student ID to sync
---   p_term_id: The term ID to sync for
---
--- Returns: Number of enrollments created/updated
-CREATE OR REPLACE FUNCTION public.sync_student_enrollment_for_term(
+-- Function: Sync a single student's enrollment for a specific term
+-- This function ensures that a student's academic_class_students record matches
+-- their current class_id and arm_id from the students table
+CREATE OR REPLACE FUNCTION sync_student_enrollment(
     p_student_id INTEGER,
-    p_term_id INTEGER
-)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+    p_term_id INTEGER,
+    p_school_id INTEGER
+) RETURNS JSONB AS $$
 DECLARE
     v_student RECORD;
-    v_term RECORD;
-    v_academic_class RECORD;
-    v_enrollments_changed INTEGER := 0;
+    v_academic_class_id INTEGER;
+    v_result JSONB;
+    v_action TEXT;
+    v_class_name TEXT;
+    v_arm_name TEXT;
 BEGIN
-    -- Get student details
-    SELECT s.id, s.class_id, s.arm_id, s.school_id, 
-           c.name as class_name, a.name as arm_name
+    -- Get student's current class and arm
+    SELECT class_id, arm_id, name
     INTO v_student
-    FROM students s
-    LEFT JOIN classes c ON s.class_id = c.id
-    LEFT JOIN arms a ON s.arm_id = a.id
-    WHERE s.id = p_student_id;
+    FROM students
+    WHERE id = p_student_id AND school_id = p_school_id;
     
-    IF NOT FOUND THEN
-        RAISE NOTICE 'Student % not found', p_student_id;
-        RETURN 0;
-    END IF;
-    
-    -- Get term details
-    SELECT id, session_label
-    INTO v_term
-    FROM terms
-    WHERE id = p_term_id;
-    
-    IF NOT FOUND THEN
-        RAISE NOTICE 'Term % not found', p_term_id;
-        RETURN 0;
-    END IF;
-    
-    -- If student doesn't have both class_id and arm_id, remove any enrollments
-    IF v_student.class_id IS NULL OR v_student.arm_id IS NULL THEN
+    -- If student not found or has no class/arm assignment, remove their enrollment
+    IF v_student IS NULL OR v_student.class_id IS NULL OR v_student.arm_id IS NULL THEN
         DELETE FROM academic_class_students
         WHERE student_id = p_student_id
-        AND enrolled_term_id = p_term_id;
+          AND enrolled_term_id = p_term_id;
         
-        GET DIAGNOSTICS v_enrollments_changed = ROW_COUNT;
-        RAISE NOTICE 'Removed % enrollment(s) for student % (no class/arm assigned)', 
-            v_enrollments_changed, p_student_id;
-        RETURN v_enrollments_changed;
+        RETURN jsonb_build_object(
+            'action', 'removed',
+            'student_id', p_student_id,
+            'reason', CASE 
+                WHEN v_student IS NULL THEN 'student_not_found'
+                ELSE 'no_class_or_arm_assigned'
+            END
+        );
     END IF;
     
-    -- Find matching academic class for this term/session
-    SELECT ac.id, ac.name, ac.level, ac.arm
-    INTO v_academic_class
-    FROM academic_classes ac
-    WHERE ac.session_label = v_term.session_label
-    AND ac.level = v_student.class_name
-    AND ac.arm = v_student.arm_name
-    AND ac.school_id = v_student.school_id
-    AND ac.is_active = true
+    -- Get student's class and arm names
+    SELECT name INTO v_class_name FROM classes WHERE id = v_student.class_id;
+    SELECT name INTO v_arm_name FROM arms WHERE id = v_student.arm_id;
+    
+    -- If class or arm not found, can't proceed
+    IF v_class_name IS NULL OR v_arm_name IS NULL THEN
+        RETURN jsonb_build_object(
+            'action', 'error',
+            'student_id', p_student_id,
+            'reason', 'class_or_arm_not_found',
+            'class_id', v_student.class_id,
+            'arm_id', v_student.arm_id
+        );
+    END IF;
+    
+    -- Find the matching academic class
+    SELECT id INTO v_academic_class_id
+    FROM academic_classes
+    WHERE school_id = p_school_id
+      AND level = v_class_name
+      AND arm = v_arm_name
+      AND is_active = TRUE
     LIMIT 1;
     
-    IF NOT FOUND THEN
-        RAISE NOTICE 'No matching academic class found for student % (class: %, arm: %, session: %)',
-            p_student_id, v_student.class_name, v_student.arm_name, v_term.session_label;
-        
-        -- Remove any existing enrollments since there's no matching class
+    -- If no matching academic class, can't enroll
+    IF v_academic_class_id IS NULL THEN
         DELETE FROM academic_class_students
         WHERE student_id = p_student_id
-        AND enrolled_term_id = p_term_id;
+          AND enrolled_term_id = p_term_id;
         
-        RETURN 0;
+        RETURN jsonb_build_object(
+            'action', 'removed',
+            'student_id', p_student_id,
+            'reason', 'no_matching_academic_class',
+            'class_name', v_class_name,
+            'arm_name', v_arm_name
+        );
     END IF;
     
-    -- First, remove any enrollments for this student/term that don't match the correct class
-    DELETE FROM academic_class_students
-    WHERE student_id = p_student_id
-    AND enrolled_term_id = p_term_id
-    AND academic_class_id != v_academic_class.id;
+    -- Upsert the enrollment
+    INSERT INTO academic_class_students (academic_class_id, student_id, enrolled_term_id)
+    VALUES (v_academic_class_id, p_student_id, p_term_id)
+    ON CONFLICT (academic_class_id, student_id, enrolled_term_id) 
+    DO UPDATE SET academic_class_id = EXCLUDED.academic_class_id
+    RETURNING 
+        CASE 
+            WHEN xmax = 0 THEN 'created'
+            ELSE 'updated'
+        END INTO v_action;
     
-    GET DIAGNOSTICS v_enrollments_changed = ROW_COUNT;
-    
-    -- Insert enrollment if it doesn't exist
-    -- Check if enrollment already exists first
-    IF NOT EXISTS (
-        SELECT 1 FROM academic_class_students
-        WHERE academic_class_id = v_academic_class.id
-        AND student_id = p_student_id
-        AND enrolled_term_id = p_term_id
-    ) THEN
-        INSERT INTO academic_class_students (academic_class_id, student_id, enrolled_term_id)
-        VALUES (v_academic_class.id, p_student_id, p_term_id);
-        
-        v_enrollments_changed := v_enrollments_changed + 1;
-        RAISE NOTICE 'Enrolled student % in academic class % for term %',
-            p_student_id, v_academic_class.name, p_term_id;
-    END IF;
-    
-    RETURN v_enrollments_changed;
+    RETURN jsonb_build_object(
+        'action', COALESCE(v_action, 'updated'),
+        'student_id', p_student_id,
+        'academic_class_id', v_academic_class_id,
+        'class_name', v_class_name,
+        'arm_name', v_arm_name
+    );
 END;
-$$;
+$$ LANGUAGE plpgsql;
 
--- ============================================
--- FUNCTION: Bulk sync all students for a term
--- ============================================
--- Synchronizes all active students' enrollments for a given term.
--- This is useful when creating a new term or fixing inconsistencies.
---
--- Parameters:
---   p_term_id: The term ID to sync
---   p_school_id: Optional school ID to limit sync (default NULL = all schools)
---
--- Returns: Number of enrollments created/updated
-CREATE OR REPLACE FUNCTION public.sync_all_students_for_term(
+-- Function: Sync all students for a specific term
+-- This is the main function for bulk synchronization
+CREATE OR REPLACE FUNCTION sync_all_students_for_term(
     p_term_id INTEGER,
-    p_school_id INTEGER DEFAULT NULL
-)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+    p_school_id INTEGER
+) RETURNS JSONB AS $$
 DECLARE
     v_student RECORD;
-    v_total_changed INTEGER := 0;
-    v_changed INTEGER;
+    v_result JSONB;
+    v_stats JSONB;
+    v_created INTEGER := 0;
+    v_updated INTEGER := 0;
+    v_removed INTEGER := 0;
+    v_errors INTEGER := 0;
 BEGIN
-    RAISE NOTICE 'Starting bulk sync for term % (school: %)', p_term_id, COALESCE(p_school_id::TEXT, 'all');
-    
+    -- Process each student
     FOR v_student IN 
-        SELECT id 
-        FROM students
-        WHERE status = 'Active'
-        AND (p_school_id IS NULL OR school_id = p_school_id)
-        ORDER BY id
+        SELECT id FROM students WHERE school_id = p_school_id
     LOOP
-        v_changed := sync_student_enrollment_for_term(v_student.id, p_term_id);
-        v_total_changed := v_total_changed + v_changed;
+        v_result := sync_student_enrollment(v_student.id, p_term_id, p_school_id);
+        
+        CASE v_result->>'action'
+            WHEN 'created' THEN v_created := v_created + 1;
+            WHEN 'updated' THEN v_updated := v_updated + 1;
+            WHEN 'removed' THEN v_removed := v_removed + 1;
+            WHEN 'error' THEN v_errors := v_errors + 1;
+        END CASE;
     END LOOP;
     
-    RAISE NOTICE 'Bulk sync complete: % enrollments changed', v_total_changed;
-    RETURN v_total_changed;
+    RETURN jsonb_build_object(
+        'success', true,
+        'term_id', p_term_id,
+        'school_id', p_school_id,
+        'stats', jsonb_build_object(
+            'created', v_created,
+            'updated', v_updated,
+            'removed', v_removed,
+            'errors', v_errors,
+            'total_processed', v_created + v_updated + v_removed + v_errors
+        )
+    );
 END;
-$$;
+$$ LANGUAGE plpgsql;
 
--- ============================================
--- FUNCTION: Sync student across all active terms
--- ============================================
--- Synchronizes a student's enrollment across all active terms.
--- Useful when a student's class/arm assignment changes.
---
--- Parameters:
---   p_student_id: The student ID to sync
---
--- Returns: Number of enrollments created/updated
-CREATE OR REPLACE FUNCTION public.sync_student_enrollment_all_terms(
-    p_student_id INTEGER
-)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+-- Trigger Function: Auto-sync student enrollment when class/arm changes
+CREATE OR REPLACE FUNCTION trigger_sync_student_enrollment()
+RETURNS TRIGGER AS $$
 DECLARE
-    v_term RECORD;
-    v_total_changed INTEGER := 0;
-    v_changed INTEGER;
-    v_student_school_id INTEGER;
-BEGIN
-    -- Get student's school_id
-    SELECT school_id INTO v_student_school_id
-    FROM students
-    WHERE id = p_student_id;
-    
-    IF NOT FOUND THEN
-        RAISE NOTICE 'Student % not found', p_student_id;
-        RETURN 0;
-    END IF;
-    
-    RAISE NOTICE 'Syncing student % across all active terms', p_student_id;
-    
-    -- Sync for all terms in the student's school
-    FOR v_term IN 
-        SELECT id, session_label, term_label
-        FROM terms
-        WHERE school_id = v_student_school_id
-        ORDER BY id DESC
-        LIMIT 10 -- Only sync recent terms to avoid processing old data
-    LOOP
-        v_changed := sync_student_enrollment_for_term(p_student_id, v_term.id);
-        v_total_changed := v_total_changed + v_changed;
-    END LOOP;
-    
-    RAISE NOTICE 'Synced student % across terms: % enrollments changed', 
-        p_student_id, v_total_changed;
-    RETURN v_total_changed;
-END;
-$$;
-
--- ============================================
--- TRIGGER: Auto-sync when student class/arm changes
--- ============================================
--- Automatically synchronizes enrollment when a student's class_id or arm_id changes
-CREATE OR REPLACE FUNCTION public.trigger_sync_student_enrollment()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    v_changed INTEGER;
+    v_active_term RECORD;
+    v_result JSONB;
 BEGIN
     -- Only sync if class_id or arm_id changed
     IF (TG_OP = 'UPDATE' AND (
-        OLD.class_id IS DISTINCT FROM NEW.class_id OR
+        OLD.class_id IS DISTINCT FROM NEW.class_id OR 
         OLD.arm_id IS DISTINCT FROM NEW.arm_id
     )) OR TG_OP = 'INSERT' THEN
         
-        RAISE NOTICE 'Student % class/arm changed, syncing enrollment', NEW.id;
-        
-        -- Sync across active terms (non-blocking)
-        BEGIN
-            v_changed := sync_student_enrollment_all_terms(NEW.id);
-            RAISE NOTICE 'Auto-sync completed for student %: % changes', NEW.id, v_changed;
-        EXCEPTION WHEN OTHERS THEN
-            -- Log error but don't fail the main transaction
-            RAISE WARNING 'Auto-sync failed for student %: %', NEW.id, SQLERRM;
-        END;
+        -- Get all active terms for this school
+        FOR v_active_term IN 
+            SELECT id FROM terms 
+            WHERE school_id = NEW.school_id 
+              AND is_active = TRUE
+        LOOP
+            -- Sync student for this term
+            PERFORM sync_student_enrollment(NEW.id, v_active_term.id, NEW.school_id);
+        END LOOP;
     END IF;
     
     RETURN NEW;
 END;
-$$;
-
--- Drop existing trigger if exists
-DROP TRIGGER IF EXISTS trigger_sync_student_enrollment_on_change ON public.students;
+$$ LANGUAGE plpgsql;
 
 -- Create trigger on students table
-CREATE TRIGGER trigger_sync_student_enrollment_on_change
-    AFTER INSERT OR UPDATE OF class_id, arm_id ON public.students
+DROP TRIGGER IF EXISTS student_enrollment_sync_trigger ON students;
+CREATE TRIGGER student_enrollment_sync_trigger
+    AFTER INSERT OR UPDATE ON students
     FOR EACH ROW
     EXECUTE FUNCTION trigger_sync_student_enrollment();
 
--- ============================================
--- FUNCTION: Manual sync for admin tools
--- ============================================
--- Comprehensive sync function that can be called from admin tools
--- to fix any inconsistencies or sync after bulk operations
---
--- Parameters:
---   p_school_id: Optional school ID to limit sync
---   p_term_id: Optional term ID to sync (NULL = all recent terms)
---
--- Returns: JSONB with sync statistics
-CREATE OR REPLACE FUNCTION public.admin_sync_student_enrollments(
-    p_school_id INTEGER DEFAULT NULL,
-    p_term_id INTEGER DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+-- Trigger Function: Auto-enroll all students when a new term is created or activated
+CREATE OR REPLACE FUNCTION trigger_sync_enrollments_on_term()
+RETURNS TRIGGER AS $$
 DECLARE
-    v_term RECORD;
-    v_total_changed INTEGER := 0;
-    v_changed INTEGER;
-    v_terms_processed INTEGER := 0;
     v_result JSONB;
 BEGIN
-    RAISE NOTICE 'Starting admin enrollment sync (school: %, term: %)', 
-        COALESCE(p_school_id::TEXT, 'all'), COALESCE(p_term_id::TEXT, 'all recent');
-    
-    IF p_term_id IS NOT NULL THEN
-        -- Sync specific term
-        v_changed := sync_all_students_for_term(p_term_id, p_school_id);
-        v_total_changed := v_changed;
-        v_terms_processed := 1;
-    ELSE
-        -- Sync all recent terms
-        FOR v_term IN 
-            SELECT id, session_label, term_label
-            FROM terms
-            WHERE (p_school_id IS NULL OR school_id = p_school_id)
-            ORDER BY id DESC
-            LIMIT 10 -- Only sync recent terms
-        LOOP
-            v_changed := sync_all_students_for_term(v_term.id, p_school_id);
-            v_total_changed := v_total_changed + v_changed;
-            v_terms_processed := v_terms_processed + 1;
-        END LOOP;
+    -- When a term becomes active (created as active or changed to active)
+    IF (TG_OP = 'INSERT' AND NEW.is_active = TRUE) OR 
+       (TG_OP = 'UPDATE' AND OLD.is_active = FALSE AND NEW.is_active = TRUE) THEN
+        
+        -- Sync all students for this term
+        PERFORM sync_all_students_for_term(NEW.id, NEW.school_id);
     END IF;
     
-    v_result := jsonb_build_object(
-        'success', true,
-        'terms_processed', v_terms_processed,
-        'enrollments_changed', v_total_changed,
-        'timestamp', NOW()
-    );
-    
-    RAISE NOTICE 'Admin sync complete: %', v_result;
-    RETURN v_result;
+    RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql;
 
--- ============================================
--- Grant necessary permissions
--- ============================================
-GRANT EXECUTE ON FUNCTION public.sync_student_enrollment_for_term(INTEGER, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_all_students_for_term(INTEGER, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_student_enrollment_all_terms(INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_sync_student_enrollments(INTEGER, INTEGER) TO authenticated;
+-- Create trigger on terms table
+DROP TRIGGER IF EXISTS term_enrollment_sync_trigger ON terms;
+CREATE TRIGGER term_enrollment_sync_trigger
+    AFTER INSERT OR UPDATE ON terms
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_sync_enrollments_on_term();
 
--- ============================================
--- Initial sync for existing data
--- ============================================
--- Run initial sync for the current/active term if it exists
--- This ensures existing students are enrolled properly
-DO $$
+-- Function: Admin sync with detailed statistics
+-- This function is used by the admin UI to manually sync enrollments
+CREATE OR REPLACE FUNCTION admin_sync_student_enrollments(
+    p_term_id INTEGER,
+    p_school_id INTEGER
+) RETURNS JSONB AS $$
 DECLARE
-    v_active_term RECORD;
-    v_result INTEGER;
+    v_result JSONB;
+    v_before_count INTEGER;
+    v_after_count INTEGER;
 BEGIN
-    -- Find active term
-    SELECT id, session_label, term_label
-    INTO v_active_term
-    FROM terms
-    WHERE is_active = true
-    LIMIT 1;
+    -- Count enrollments before sync
+    SELECT COUNT(*) INTO v_before_count
+    FROM academic_class_students
+    WHERE enrolled_term_id = p_term_id;
     
-    IF FOUND THEN
-        RAISE NOTICE 'Running initial sync for active term: % %', 
-            v_active_term.session_label, v_active_term.term_label;
-        
-        v_result := sync_all_students_for_term(v_active_term.id);
-        
-        RAISE NOTICE 'Initial sync complete: % enrollments processed', v_result;
-    ELSE
-        RAISE NOTICE 'No active term found, skipping initial sync';
-    END IF;
-END $$;
+    -- Perform sync
+    v_result := sync_all_students_for_term(p_term_id, p_school_id);
+    
+    -- Count enrollments after sync
+    SELECT COUNT(*) INTO v_after_count
+    FROM academic_class_students
+    WHERE enrolled_term_id = p_term_id;
+    
+    -- Return detailed stats
+    RETURN jsonb_build_object(
+        'success', true,
+        'term_id', p_term_id,
+        'school_id', p_school_id,
+        'before_count', v_before_count,
+        'after_count', v_after_count,
+        'sync_stats', v_result->'stats'
+    );
+END;
+$$ LANGUAGE plpgsql;
 
--- ============================================
--- Documentation Comments
--- ============================================
-COMMENT ON FUNCTION public.sync_student_enrollment_for_term IS 
-'Synchronizes a single student enrollment for a term based on students.class_id and students.arm_id';
+-- Function: Get enrollment sync diagnostics
+-- Identifies students who are out of sync
+CREATE OR REPLACE FUNCTION get_enrollment_sync_diagnostics(
+    p_term_id INTEGER,
+    p_school_id INTEGER
+) RETURNS TABLE(
+    student_id INTEGER,
+    student_name TEXT,
+    current_class_id INTEGER,
+    current_arm_id INTEGER,
+    current_class_name TEXT,
+    current_arm_name TEXT,
+    expected_academic_class_id INTEGER,
+    expected_academic_class_name TEXT,
+    enrolled_academic_class_id INTEGER,
+    enrolled_academic_class_name TEXT,
+    sync_status TEXT,
+    issue_description TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH student_info AS (
+        SELECT 
+            s.id as student_id,
+            s.name as student_name,
+            s.class_id,
+            s.arm_id,
+            c.name as class_name,
+            a.name as arm_name
+        FROM students s
+        LEFT JOIN classes c ON s.class_id = c.id
+        LEFT JOIN arms a ON s.arm_id = a.id
+        WHERE s.school_id = p_school_id
+    ),
+    expected_classes AS (
+        SELECT 
+            si.student_id,
+            si.student_name,
+            si.class_id,
+            si.arm_id,
+            si.class_name,
+            si.arm_name,
+            ac.id as expected_ac_id,
+            ac.name as expected_ac_name
+        FROM student_info si
+        LEFT JOIN academic_classes ac ON 
+            ac.school_id = p_school_id AND
+            ac.level = si.class_name AND
+            ac.arm = si.arm_name AND
+            ac.is_active = TRUE
+    ),
+    current_enrollments AS (
+        SELECT 
+            acs.student_id,
+            acs.academic_class_id as enrolled_ac_id,
+            ac.name as enrolled_ac_name
+        FROM academic_class_students acs
+        JOIN academic_classes ac ON acs.academic_class_id = ac.id
+        WHERE acs.enrolled_term_id = p_term_id
+    )
+    SELECT 
+        ec.student_id,
+        ec.student_name,
+        ec.class_id as current_class_id,
+        ec.arm_id as current_arm_id,
+        ec.class_name as current_class_name,
+        ec.arm_name as current_arm_name,
+        ec.expected_ac_id as expected_academic_class_id,
+        ec.expected_ac_name as expected_academic_class_name,
+        ce.enrolled_ac_id as enrolled_academic_class_id,
+        ce.enrolled_ac_name as enrolled_academic_class_name,
+        CASE 
+            WHEN ec.class_id IS NULL OR ec.arm_id IS NULL THEN 'no_assignment'
+            WHEN ec.expected_ac_id IS NULL THEN 'no_matching_class'
+            WHEN ce.enrolled_ac_id IS NULL THEN 'not_enrolled'
+            WHEN ce.enrolled_ac_id != ec.expected_ac_id THEN 'mismatched'
+            ELSE 'synced'
+        END as sync_status,
+        CASE 
+            WHEN ec.class_id IS NULL OR ec.arm_id IS NULL THEN 
+                'Student has no class or arm assignment in students table'
+            WHEN ec.expected_ac_id IS NULL THEN 
+                'No active academic class found for ' || ec.class_name || ' ' || ec.arm_name
+            WHEN ce.enrolled_ac_id IS NULL THEN 
+                'Student not enrolled in any class for this term'
+            WHEN ce.enrolled_ac_id != ec.expected_ac_id THEN 
+                'Student enrolled in ' || ce.enrolled_ac_name || ' but should be in ' || ec.expected_ac_name
+            ELSE 'Student correctly enrolled'
+        END as issue_description
+    FROM expected_classes ec
+    LEFT JOIN current_enrollments ce ON ec.student_id = ce.student_id
+    WHERE 
+        -- Only return students with issues or filter all if needed
+        CASE 
+            WHEN ec.class_id IS NULL OR ec.arm_id IS NULL THEN TRUE
+            WHEN ec.expected_ac_id IS NULL THEN TRUE
+            WHEN ce.enrolled_ac_id IS NULL THEN TRUE
+            WHEN ce.enrolled_ac_id != ec.expected_ac_id THEN TRUE
+            ELSE FALSE
+        END
+    ORDER BY ec.student_name;
+END;
+$$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION public.sync_all_students_for_term IS 
-'Bulk synchronizes all active students for a given term';
+-- Grant execute permissions on functions
+GRANT EXECUTE ON FUNCTION sync_student_enrollment(INTEGER, INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION sync_all_students_for_term(INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION admin_sync_student_enrollments(INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_enrollment_sync_diagnostics(INTEGER, INTEGER) TO authenticated;
 
-COMMENT ON FUNCTION public.sync_student_enrollment_all_terms IS 
-'Synchronizes a student across all active terms after class/arm change';
+-- Create index for optimal sync performance
+-- This index significantly speeds up the academic class lookup in sync operations
+CREATE INDEX IF NOT EXISTS idx_academic_classes_sync_lookup 
+    ON academic_classes(school_id, level, arm, is_active)
+    WHERE is_active = TRUE;
 
-COMMENT ON FUNCTION public.admin_sync_student_enrollments IS 
-'Admin tool function to manually sync enrollments with detailed statistics';
-
-COMMENT ON TRIGGER trigger_sync_student_enrollment_on_change ON public.students IS 
-'Automatically syncs student enrollment when class_id or arm_id changes';
+-- Add comment documentation
+COMMENT ON FUNCTION sync_student_enrollment IS 'Synchronizes a single student enrollment record for a term based on their class_id and arm_id';
+COMMENT ON FUNCTION sync_all_students_for_term IS 'Bulk synchronizes all students enrollments for a specific term';
+COMMENT ON FUNCTION admin_sync_student_enrollments IS 'Admin function to manually sync enrollments with detailed statistics';
+COMMENT ON FUNCTION get_enrollment_sync_diagnostics IS 'Diagnostic function to identify students with enrollment sync issues';
+COMMENT ON TRIGGER student_enrollment_sync_trigger ON students IS 'Auto-syncs student enrollments when class_id or arm_id changes';
+COMMENT ON TRIGGER term_enrollment_sync_trigger ON terms IS 'Auto-enrolls all students when a new term is created or activated';
