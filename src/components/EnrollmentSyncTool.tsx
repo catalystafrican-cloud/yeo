@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { supabase } from '../offline/client';
+import { supa as supabase } from '../offline/client';
 import type { Term } from '../types';
 
 interface EnrollmentSyncToolProps {
