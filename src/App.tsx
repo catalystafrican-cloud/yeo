@@ -1784,6 +1784,7 @@ const App: React.FC = () => {
     }, [addToast]);
 
     const handleAnalyzeTeacherRisk = useCallback(async () => {
+         const aiClient = getAIClient();
          if (!aiClient) return;
          addToast('Analyzing teacher risk factors...', 'info');
          
@@ -1791,13 +1792,13 @@ const App: React.FC = () => {
             const reportContext = reports.map(r => `Report (${r.created_at}): ${r.report_text}`).join('\n');
             const prompt = `Analyze the following reports for signs of teacher burnout, stress, or performance issues. Return a JSON array of objects with "teacherName" (string), "riskScore" (1-100), and "reasons" (array of strings). Only include high-risk cases. Reports: ${reportContext}`;
             
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json' }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
 
-            const risks = extractAndParseJson<{ teacherName: string, riskScore: number, reasons: string[] }[]>(textFromGemini(response));
+            const risks = extractAndParseJson<{ teacherName: string, riskScore: number, reasons: string[] }[]>(textFromAI(response));
             
             if (risks && Array.isArray(risks) && risks.length > 0) {
                 const mappedRisks: AtRiskTeacher[] = risks.map(r => {
@@ -1818,7 +1819,7 @@ const App: React.FC = () => {
                  addToast('Failed to analyze risks.', 'error');
              }
          }
-    }, [aiClient, reports, users, addToast]);
+    }, [reports, users, addToast, schoolSettings]);
 
     const handleSaveTeamFeedback = useCallback(async (teamId: number, rating: number, comments: string | null): Promise<boolean> => {
         if (!userProfile) return false;
@@ -1840,6 +1841,7 @@ const App: React.FC = () => {
 
     // ... (Handlers for policy, curriculum report, profile, daily digest) ...
     const handleGeneratePolicyInquiries = useCallback(async () => {
+        const aiClient = getAIClient();
         if (!aiClient) return;
         addToast('Scanning for policy gaps...', 'info');
         
@@ -1847,13 +1849,13 @@ const App: React.FC = () => {
             const incidents = reports.filter(r => r.report_type === ReportType.Incident).map(r => r.report_text).join('\n---\n');
             const prompt = `Analyze these school incident reports. Identify 3 areas where school policy might be unclear, missing, or frequently violated. Return a JSON array of objects with "category", "question", and "context". Incidents:\n${incidents}`;
             
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json' }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
             
-            const inquiries = extractAndParseJson<PolicyInquiry[]>(textFromGemini(response));
+            const inquiries = extractAndParseJson<PolicyInquiry[]>(textFromAI(response));
             if (inquiries && Array.isArray(inquiries)) {
                 setPolicyInquiries(inquiries.map(i => ({ ...i, id: String(Date.now() + Math.random()) })));
                 addToast('Policy inquiries generated.', 'success');
@@ -1866,9 +1868,10 @@ const App: React.FC = () => {
                 addToast('Failed to generate inquiries.', 'error');
             }
         }
-    }, [aiClient, reports, addToast]);
+    }, [reports, addToast, schoolSettings]);
 
     const handleGenerateCurriculumReport = useCallback(async () => {
+        const aiClient = getAIClient();
         if (!aiClient) return;
         addToast('Generating curriculum report...', 'info');
         
@@ -1880,13 +1883,13 @@ const App: React.FC = () => {
             
             Plans: ${JSON.stringify(lessonPlans.map(p => ({ title: p.title, status: p.coverage_status, teacher: p.author?.name })))}`;
             
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json' }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
             
-            const analysis = extractAndParseJson<any>(textFromGemini(response));
+            const analysis = extractAndParseJson<any>(textFromAI(response));
             
             if (analysis) {
                 const report: CurriculumReport = {
@@ -1907,7 +1910,7 @@ const App: React.FC = () => {
                 addToast('Failed to generate report.', 'error');
             }
         }
-    }, [aiClient, lessonPlans, addToast]);
+    }, [lessonPlans, addToast, schoolSettings]);
 
     const handleUpdateProfile = useCallback(async (data: Partial<UserProfile>): Promise<boolean> => {
         if (!userProfile) return false;
@@ -1950,13 +1953,13 @@ const App: React.FC = () => {
             - parent_communication_points: Array of strings for potential parent updates.
             `;
             
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json' }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
             
-            const digest = extractAndParseJson<Omit<DailyBriefing, 'generated_at'>>(textFromGemini(response));
+            const digest = extractAndParseJson<Omit<DailyBriefing, 'generated_at'>>(textFromAI(response));
             if (digest && typeof digest === 'object') {
                 return { ...digest, generated_at: new Date().toISOString() };
             }
@@ -1970,7 +1973,7 @@ const App: React.FC = () => {
             }
             return null;
         }
-    }, [aiClient, reports, tasks, addToast]);
+    }, [reports, tasks, addToast, schoolSettings]);
 
     const handleAcceptTaskSuggestion = useCallback(async (suggestion: SuggestedTask, assigneeId: string) => {
         if (!userProfile) return;
@@ -2055,6 +2058,7 @@ const App: React.FC = () => {
         
         // ADDED: Real-time AI Analysis logic
         let analysis = null;
+        const aiClient = getAIClient();
         if (aiClient && data.report_text) {
             try {
                 const prompt = `Analyze this school report for sentiment, urgency, and summary.
@@ -2068,13 +2072,13 @@ const App: React.FC = () => {
                 "summary": "Short summary (max 15 words)"
                 }`;
                 
-                const response = await aiClient.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                    config: { responseMimeType: 'application/json' }
+                const response = await aiClient.chat.completions.create({
+                    model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                    messages: [{ role: 'user', content: prompt }],
+                    response_format: { type: 'json_object' }
                 });
                 
-                analysis = extractAndParseJson(textFromGemini(response));
+                analysis = extractAndParseJson(textFromAI(response));
             } catch (e: any) {
                 console.error("Real-time analysis failed", e);
                 if (isRateLimitError(e)) {
@@ -2642,7 +2646,9 @@ const App: React.FC = () => {
     const AI_AWARDS_GENERATION_COUNT = 3;
 
     const handleGenerateStudentAwards = useCallback(async (): Promise<void> => {
-        if (!userProfile || !aiClient) return;
+        if (!userProfile) return;
+        const aiClient = getAIClient();
+        if (!aiClient) return;
         
         // Check if AI is in cooldown
         if (isAiInCooldown()) {
@@ -2653,14 +2659,14 @@ const App: React.FC = () => {
         try {
             // AI Logic: Generate awards based on positive behavior records
             const prompt = `Analyze positive behavior records: ${JSON.stringify(positiveRecords.slice(0, AI_AWARDS_ANALYSIS_RECORD_LIMIT))}. Generate ${AI_AWARDS_GENERATION_COUNT} awards. JSON: [{student_id, award_type, reason}]`;
-            const res = await aiClient.models.generateContent({ 
-                model: 'gemini-2.5-flash', 
-                contents: prompt, 
-                config: { responseMimeType: 'application/json' } 
+            const res = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
             
             if (res) {
-                const awards = extractAndParseJson<any[]>(textFromGemini(res));
+                const awards = extractAndParseJson<any[]>(textFromAI(res));
                 if (awards && Array.isArray(awards)) {
                     const { error } = await supabase.from('student_awards').insert(
                         awards.map((a: any) => ({ ...a, school_id: userProfile.school_id }))
@@ -2682,7 +2688,7 @@ const App: React.FC = () => {
                 addToast('Failed to generate awards. Please try again.', 'error');
             }
         }
-    }, [userProfile, aiClient, positiveRecords, addToast, session, fetchData]);
+    }, [userProfile, positiveRecords, addToast, session, fetchData, schoolSettings]);
 
     const handleGenerateStudentInsight = useCallback(async (studentId: number): Promise<any | null> => {
         if (!aiClient) return null;
@@ -2694,6 +2700,12 @@ const App: React.FC = () => {
         }
         
         try {
+            const aiClient = getAIClient();
+            if (!aiClient) {
+                addToast('AI client not configured', 'error');
+                return null;
+            }
+
             const student = students.find(s => s.id === studentId);
             if (!student) return null;
 
@@ -2704,14 +2716,14 @@ const App: React.FC = () => {
             };
 
             const prompt = `Analyze this student's data and provide insights: ${JSON.stringify(studentData)}. Return JSON with fields: strengths, areas_for_improvement, recommendations.`;
-            const res = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: 'application/json' }
+            const res = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
 
             if (res) {
-                const insight = extractAndParseJson<any>(textFromGemini(res));
+                const insight = extractAndParseJson<any>(textFromAI(res));
                 if (insight) {
                     addToast('Student insight generated.', 'success');
                     return insight;
@@ -2728,7 +2740,7 @@ const App: React.FC = () => {
             }
             return null;
         }
-    }, [aiClient, students, reports, positiveRecords, addToast]);
+    }, [students, reports, positiveRecords, addToast, schoolSettings]);
 
 
     // Lock academic assignment scores (for Result Manager)
@@ -3738,15 +3750,22 @@ const App: React.FC = () => {
         if (!userProfile) return null;
         let finalPlanData = { ...planData };
 
-        if (generateWithAi && aiClient) {
-            const prompt = `Generate a detailed lesson plan for "${planData.title}" (Grade: ${planData.grade_level}). Include objectives, materials, activities, and assessment methods. Format as JSON matching the LessonPlan structure.`;
-             try {
-                const response = await aiClient.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: 'application/json' } });
-                const generated = extractAndParseJson<Partial<LessonPlan>>(textFromGemini(response));
-                if (generated) finalPlanData = { ...finalPlanData, ...generated };
-            } catch (e) {
-                console.error("AI Gen failed", e);
-                addToast("AI generation failed, saving manual input.", "error");
+        if (generateWithAi) {
+            const aiClient = getAIClient();
+            if (aiClient) {
+                const prompt = `Generate a detailed lesson plan for "${planData.title}" (Grade: ${planData.grade_level}). Include objectives, materials, activities, and assessment methods. Format as JSON matching the LessonPlan structure.`;
+                try {
+                    const response = await aiClient.chat.completions.create({
+                        model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                        messages: [{ role: 'user', content: prompt }],
+                        response_format: { type: 'json_object' }
+                    });
+                    const generated = extractAndParseJson<Partial<LessonPlan>>(textFromAI(response));
+                    if (generated) finalPlanData = { ...finalPlanData, ...generated };
+                } catch (e) {
+                    console.error("AI Gen failed", e);
+                    addToast("AI generation failed, saving manual input.", "error");
+                }
             }
         }
         
@@ -4765,42 +4784,13 @@ Generate a JSON object with:
    - "total_reports": The total number of reports
    - "key_themes": Array of 3-5 key themes or patterns observed in the data`;
 
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            executive_summary: { type: Type.STRING },
-                            strategic_goals: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        goal: { type: Type.STRING },
-                                        initiatives: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                        kpi: { type: Type.STRING }
-                                    },
-                                    required: ['goal', 'initiatives', 'kpi']
-                                }
-                            },
-                            data_summary: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    total_reports: { type: Type.NUMBER },
-                                    key_themes: { type: Type.ARRAY, items: { type: Type.STRING } }
-                                },
-                                required: ['total_reports', 'key_themes']
-                            }
-                        },
-                        required: ['executive_summary', 'strategic_goals', 'data_summary']
-                    }
-                }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
 
-            const planData = extractAndParseJson<Omit<SchoolImprovementPlan, 'generated_at'>>(textFromGemini(response));
+            const planData = extractAndParseJson<Omit<SchoolImprovementPlan, 'generated_at'>>(textFromAI(response));
             if (!planData) throw new Error("Invalid AI response");
 
             const improvementPlan: SchoolImprovementPlan = {
@@ -4905,29 +4895,13 @@ Generate a JSON array of coverage deviation reports. For each teacher-assignment
 
 Focus on assignments with low completion rates or coverage issues. Return an empty array if all assignments are on track.`;
 
-            const response = await aiClient.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                teacherName: { type: Type.STRING },
-                                teachingAssignment: { type: Type.STRING },
-                                week: { type: Type.NUMBER },
-                                status: { type: Type.STRING },
-                                justification: { type: Type.STRING }
-                            },
-                            required: ['teacherName', 'teachingAssignment', 'week', 'status', 'justification']
-                        }
-                    }
-                }
+            const response = await aiClient.chat.completions.create({
+                model: schoolSettings?.ai_settings?.default_model || 'openai/gpt-4o',
+                messages: [{ role: 'user', content: prompt }],
+                response_format: { type: 'json_object' }
             });
 
-            const deviations = extractAndParseJson<CoverageDeviation[]>(textFromGemini(response));
+            const deviations = extractAndParseJson<CoverageDeviation[]>(textFromAI(response));
             if (!deviations) throw new Error("Invalid AI response");
 
             const report = {
@@ -4957,7 +4931,7 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
             }
             return null;
         }
-    }, [userProfile, aiClient, session, isAiInCooldown, addToast, lessonPlans, schoolSettings, handleUpdateSchoolSettings, fetchData, isRateLimitError, setAiCooldown]);
+    }, [userProfile, session, isAiInCooldown, addToast, lessonPlans, schoolSettings, handleUpdateSchoolSettings, fetchData, isRateLimitError, setAiCooldown]);
 
     // --- Alias for existing handler ---
     const handleUpdateReportComments = useCallback(async (reportId: number, teacherComment: string, principalComment: string): Promise<void> => {
