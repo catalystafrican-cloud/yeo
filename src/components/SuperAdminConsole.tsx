@@ -151,10 +151,13 @@ const SuperAdminConsole: React.FC<SuperAdminConsoleProps> = (props) => {
         return tabs.filter(tab => isSuperAdmin || userPermissions.includes(tab.permission));
     }, [userPermissions]);
 
-    const [activeTab, setActiveTab] = useState<AdminTab>(visibleTabs[0]?.name || 'Branding');
-    const [structureSubTab, setStructureSubTab] = useState<'assessment' | 'terms' | 'classes' | 'assignments' | 'subjects' | 'classrooms' | 'arms' | 'enrollment_sync'>('assessment');
+    // Define structure sub-tab type for better maintainability
+    type StructureSubTab = 'assessment' | 'terms' | 'classes' | 'assignments' | 'subjects' | 'classrooms' | 'arms' | 'enrollment_sync';
 
-    const structureSubTabs = [
+    const [activeTab, setActiveTab] = useState<AdminTab>(visibleTabs[0]?.name || 'Branding');
+    const [structureSubTab, setStructureSubTab] = useState<StructureSubTab>('assessment');
+
+    const structureSubTabs: { id: StructureSubTab; label: string }[] = [
         { id: 'assessment' as const, label: 'Assessment Templates' },
         { id: 'terms' as const, label: 'Academic Terms' },
         { id: 'classes' as const, label: 'Academic Classes' },

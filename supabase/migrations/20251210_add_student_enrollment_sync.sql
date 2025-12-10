@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION sync_student_enrollment(
 ) RETURNS JSONB AS $$
 DECLARE
     v_student RECORD;
-    v_academic_class RECORD;
+    v_academic_class_id INTEGER;
     v_result JSONB;
     v_action TEXT;
     v_class_name TEXT;
@@ -57,7 +57,7 @@ BEGIN
     END IF;
     
     -- Find the matching academic class
-    SELECT id INTO v_academic_class
+    SELECT id INTO v_academic_class_id
     FROM academic_classes
     WHERE school_id = p_school_id
       AND level = v_class_name
@@ -66,7 +66,7 @@ BEGIN
     LIMIT 1;
     
     -- If no matching academic class, can't enroll
-    IF v_academic_class IS NULL THEN
+    IF v_academic_class_id IS NULL THEN
         DELETE FROM academic_class_students
         WHERE student_id = p_student_id
           AND enrolled_term_id = p_term_id;
@@ -82,7 +82,7 @@ BEGIN
     
     -- Upsert the enrollment
     INSERT INTO academic_class_students (academic_class_id, student_id, enrolled_term_id)
-    VALUES (v_academic_class.id, p_student_id, p_term_id)
+    VALUES (v_academic_class_id, p_student_id, p_term_id)
     ON CONFLICT (academic_class_id, student_id, enrolled_term_id) 
     DO UPDATE SET academic_class_id = EXCLUDED.academic_class_id
     RETURNING 
@@ -94,7 +94,7 @@ BEGIN
     RETURN jsonb_build_object(
         'action', COALESCE(v_action, 'updated'),
         'student_id', p_student_id,
-        'academic_class_id', v_academic_class.id,
+        'academic_class_id', v_academic_class_id,
         'class_name', v_class_name,
         'arm_name', v_arm_name
     );
