@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { supa as supabase } from '../offline/client';
 import type { Term } from '../types';
 
@@ -81,9 +81,12 @@ const EnrollmentSyncTool: React.FC<EnrollmentSyncToolProps> = ({ terms, schoolId
                 'success'
             );
 
-            // Auto-load diagnostics after sync if there are issues
+            // Notify user about errors if any, suggest running diagnostics
             if (stats.errors > 0) {
-                loadDiagnostics();
+                addToast(
+                    `⚠️ ${stats.errors} errors occurred during sync. Click "Run Diagnostics" to see details.`,
+                    'info'
+                );
             }
         } catch (error: any) {
             console.error('Sync error:', error);
@@ -126,7 +129,11 @@ const EnrollmentSyncTool: React.FC<EnrollmentSyncToolProps> = ({ terms, schoolId
         }
     }, [selectedTermId, schoolId, addToast]);
 
-    const selectedTerm = terms.find(t => t.id === selectedTermId);
+    // Memoize selected term to avoid unnecessary array searches
+    const selectedTerm = useMemo(
+        () => terms.find(t => t.id === selectedTermId),
+        [terms, selectedTermId]
+    );
 
     const getStatusBadgeColor = (status: string) => {
         switch (status) {

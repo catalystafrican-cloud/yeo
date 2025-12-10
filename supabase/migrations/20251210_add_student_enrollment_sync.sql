@@ -16,6 +16,8 @@ DECLARE
     v_academic_class RECORD;
     v_result JSONB;
     v_action TEXT;
+    v_class_name TEXT;
+    v_arm_name TEXT;
 BEGIN
     -- Get student's current class and arm
     SELECT class_id, arm_id, name
@@ -40,67 +42,62 @@ BEGIN
     END IF;
     
     -- Get student's class and arm names
-    DECLARE
-        v_class_name TEXT;
-        v_arm_name TEXT;
-    BEGIN
-        SELECT name INTO v_class_name FROM classes WHERE id = v_student.class_id;
-        SELECT name INTO v_arm_name FROM arms WHERE id = v_student.arm_id;
-        
-        -- If class or arm not found, can't proceed
-        IF v_class_name IS NULL OR v_arm_name IS NULL THEN
-            RETURN jsonb_build_object(
-                'action', 'error',
-                'student_id', p_student_id,
-                'reason', 'class_or_arm_not_found',
-                'class_id', v_student.class_id,
-                'arm_id', v_student.arm_id
-            );
-        END IF;
-        
-        -- Find the matching academic class
-        SELECT id INTO v_academic_class
-        FROM academic_classes
-        WHERE school_id = p_school_id
-          AND level = v_class_name
-          AND arm = v_arm_name
-          AND is_active = TRUE
-        LIMIT 1;
-        
-        -- If no matching academic class, can't enroll
-        IF v_academic_class IS NULL THEN
-            DELETE FROM academic_class_students
-            WHERE student_id = p_student_id
-              AND enrolled_term_id = p_term_id;
-            
-            RETURN jsonb_build_object(
-                'action', 'removed',
-                'student_id', p_student_id,
-                'reason', 'no_matching_academic_class',
-                'class_name', v_class_name,
-                'arm_name', v_arm_name
-            );
-        END IF;
-        
-        -- Upsert the enrollment
-        INSERT INTO academic_class_students (academic_class_id, student_id, enrolled_term_id)
-        VALUES (v_academic_class.id, p_student_id, p_term_id)
-        ON CONFLICT (academic_class_id, student_id, enrolled_term_id) 
-        DO UPDATE SET academic_class_id = EXCLUDED.academic_class_id
-        RETURNING 
-            CASE 
-                WHEN xmax = 0 THEN 'created'
-                ELSE 'updated'
-            END INTO v_action;
+    SELECT name INTO v_class_name FROM classes WHERE id = v_student.class_id;
+    SELECT name INTO v_arm_name FROM arms WHERE id = v_student.arm_id;
+    
+    -- If class or arm not found, can't proceed
+    IF v_class_name IS NULL OR v_arm_name IS NULL THEN
+        RETURN jsonb_build_object(
+            'action', 'error',
+            'student_id', p_student_id,
+            'reason', 'class_or_arm_not_found',
+            'class_id', v_student.class_id,
+            'arm_id', v_student.arm_id
+        );
+    END IF;
+    
+    -- Find the matching academic class
+    SELECT id INTO v_academic_class
+    FROM academic_classes
+    WHERE school_id = p_school_id
+      AND level = v_class_name
+      AND arm = v_arm_name
+      AND is_active = TRUE
+    LIMIT 1;
+    
+    -- If no matching academic class, can't enroll
+    IF v_academic_class IS NULL THEN
+        DELETE FROM academic_class_students
+        WHERE student_id = p_student_id
+          AND enrolled_term_id = p_term_id;
         
         RETURN jsonb_build_object(
-            'action', COALESCE(v_action, 'updated'),
+            'action', 'removed',
             'student_id', p_student_id,
-            'academic_class_id', v_academic_class.id,
+            'reason', 'no_matching_academic_class',
             'class_name', v_class_name,
             'arm_name', v_arm_name
         );
-    END;
+    END IF;
+    
+    -- Upsert the enrollment
+    INSERT INTO academic_class_students (academic_class_id, student_id, enrolled_term_id)
+    VALUES (v_academic_class.id, p_student_id, p_term_id)
+    ON CONFLICT (academic_class_id, student_id, enrolled_term_id) 
+    DO UPDATE SET academic_class_id = EXCLUDED.academic_class_id
+    RETURNING 
+        CASE 
+            WHEN xmax = 0 THEN 'created'
+            ELSE 'updated'
+        END INTO v_action;
+    
+    RETURN jsonb_build_object(
+        'action', COALESCE(v_action, 'updated'),
+        'student_id', p_student_id,
+        'academic_class_id', v_academic_class.id,
+        'class_name', v_class_name,
+        'arm_name', v_arm_name
+    );
 END;
 $$ LANGUAGE plpgsql;
 
@@ -353,6 +350,12 @@ GRANT EXECUTE ON FUNCTION sync_student_enrollment(INTEGER, INTEGER, INTEGER) TO 
 GRANT EXECUTE ON FUNCTION sync_all_students_for_term(INTEGER, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_sync_student_enrollments(INTEGER, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_enrollment_sync_diagnostics(INTEGER, INTEGER) TO authenticated;
+
+-- Create index for optimal sync performance
+-- This index significantly speeds up the academic class lookup in sync operations
+CREATE INDEX IF NOT EXISTS idx_academic_classes_sync_lookup 
+    ON academic_classes(school_id, level, arm, is_active)
+    WHERE is_active = TRUE;
 
 -- Add comment documentation
 COMMENT ON FUNCTION sync_student_enrollment IS 'Synchronizes a single student enrollment record for a term based on their class_id and arm_id';
