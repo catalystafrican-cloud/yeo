@@ -159,7 +159,7 @@ export async function createOrGetPaystackCustomer(
     // Generate a valid email if one doesn't exist
     const email = student.email && student.email.trim() !== '' 
         ? student.email.trim()
-        : `student${student.id}@school${student.school_id}.temp`;
+        : `student${student.id}@school${student.school_id}.local`;
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -173,10 +173,10 @@ export async function createOrGetPaystackCustomer(
         : undefined;
     
     const requestBody = {
-        email: email,
+        email,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        ...(phone && { phone: phone }),
+        ...(phone && { phone }),
         metadata: {
             student_id: student.id,
             school_id: student.school_id,
