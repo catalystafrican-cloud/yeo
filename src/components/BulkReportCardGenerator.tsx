@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
-import type { Student, StudentInvoice, GradingScheme, SchoolConfig } from '../types';
+import type { Student, GradingScheme, SchoolConfig } from '../types';
 import Spinner from './common/Spinner';
 import { CloseIcon, DownloadIcon, CheckCircleIcon, AlertCircleIcon } from './common/icons';
 import html2canvas from 'html2canvas';
@@ -15,8 +15,8 @@ interface BulkReportCardGeneratorProps {
   students: Student[];
   onClose: () => void;
   addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-  schoolConfig: SchoolConfig | null;
-  gradingSchemes: GradingScheme[];
+  schoolConfig: SchoolConfig | null; // eslint-disable-line @typescript-eslint/no-unused-vars
+  gradingSchemes: GradingScheme[]; // eslint-disable-line @typescript-eslint/no-unused-vars
 }
 
 interface StudentWithDebt extends Student {
@@ -53,6 +53,10 @@ const BulkReportCardGenerator: React.FC<BulkReportCardGeneratorProps> = ({
     setIsLoading(true);
     try {
       // Get students in this class
+      if (!supabase) {
+        throw new Error('Database connection not available');
+      }
+
       const { data: enrollments, error: enrollError } = await supabase
         .from('academic_class_students')
         .select('student_id')
