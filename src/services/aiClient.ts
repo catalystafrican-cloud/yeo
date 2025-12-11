@@ -1,10 +1,35 @@
 import OpenAI from 'openai';
+import { 
+  initializeOllamaClient, 
+  getOllamaClient, 
+  getOllamaError,
+  getOllamaConfig 
+} from './ollamaClient';
 
-// The API key will be loaded dynamically from school settings
+// AI Provider state
+let currentProvider: 'openrouter' | 'ollama' = 'openrouter';
 let openRouterClient: OpenAI | null = null;
 let aiClientError: string | null = null;
 let currentModel: string = 'openai/gpt-4o'; // Default model
 
+/**
+ * Set the AI provider to use
+ */
+export function setAIProvider(provider: 'openrouter' | 'ollama'): void {
+  currentProvider = provider;
+  console.log('[AI] Provider set to:', provider);
+}
+
+/**
+ * Get the current AI provider
+ */
+export function getAIProvider(): 'openrouter' | 'ollama' {
+  return currentProvider;
+}
+
+/**
+ * Initialize OpenRouter client
+ */
 export function initializeAIClient(apiKey: string, model?: string): void {
   if (!apiKey) {
     aiClientError = "OpenRouter API Key not configured. Please add your API key in Settings > AI Configuration.";
@@ -26,21 +51,58 @@ export function initializeAIClient(apiKey: string, model?: string): void {
     if (model) {
       currentModel = model;
     }
+    console.log('[AI] OpenRouter client initialized with model:', currentModel);
   } catch (e: any) {
     aiClientError = `Failed to initialize OpenRouter client: ${e.message}`;
     openRouterClient = null;
   }
 }
 
-export function getAIClient(): OpenAI | null {
+/**
+ * Initialize Ollama client
+ */
+export function initializeOllamaAIClient(url?: string, model?: string): void {
+  initializeOllamaClient(url, model);
+  if (model) {
+    currentModel = model;
+  }
+  console.log('[AI] Ollama client initialized');
+}
+
+/**
+ * Get the active AI client based on the current provider
+ * Returns an OpenAI-compatible client object
+ */
+export function getAIClient(): OpenAI | any | null {
+  if (currentProvider === 'ollama') {
+    const ollamaClient = getOllamaClient();
+    const error = getOllamaError();
+    if (error) {
+      aiClientError = error;
+    }
+    return ollamaClient;
+  }
+  
   return openRouterClient;
 }
 
+/**
+ * Get any error from the AI client
+ */
 export function getAIClientError(): string | null {
+  if (currentProvider === 'ollama') {
+    return getOllamaError();
+  }
   return aiClientError;
 }
 
+/**
+ * Get the current model being used
+ */
 export function getCurrentModel(): string {
+  if (currentProvider === 'ollama') {
+    return getOllamaConfig().model;
+  }
   return currentModel;
 }
 

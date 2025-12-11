@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, useMemo, Component } from 'react';
 import type { Session, User } from '@supabase/auth-js';
 import { supabaseError } from './services/supabaseClient';
-import { initializeAIClient, getAIClient, getAIClientError } from './services/aiClient';
+import { initializeAIClient, getAIClient, getAIClientError, setAIProvider, initializeOllamaAIClient } from './services/aiClient';
 import type { OpenAI } from 'openai';
 import { Team, TeamFeedback, TeamPulse, Task, TaskPriority, TaskStatus, ReportType, CoverageStatus, RoleTitle, Student, UserProfile, ReportRecord, ReportComment, Announcement, Notification, ToastMessage, RoleDetails, PositiveBehaviorRecord, StudentAward, StaffAward, AIProfileInsight, AtRiskStudent, Alert, StudentInterventionPlan, SIPLog, SchoolHealthReport, SchoolSettings, PolicyInquiry, LivingPolicySnippet, AtRiskTeacher, InventoryItem, CalendarEvent, LessonPlan, CurriculumReport, LessonPlanAnalysis, DailyBriefing, StudentProfile, TeachingAssignment, BaseDataObject, Survey, SurveyWithQuestions, TeacherRatingWeekly, SuggestedTask, SchoolImprovementPlan, Curriculum, CurriculumWeek, CoverageDeviation, ClassGroup, AttendanceSchedule, AttendanceRecord, UPSSGPTResponse, SchoolConfig, Term, AcademicClass, AcademicTeachingAssignment, GradingScheme, GradingSchemeRule, AcademicClassStudent, ScoreEntry, StudentTermReport, AuditLog, Assessment, AssessmentScore, CoverageVote, RewardStoreItem, PayrollRun, PayrollItem, PayrollAdjustment, Campus, TeacherCheckin, CheckinAnomaly, LeaveType, LeaveRequest, LeaveRequestStatus, TeacherShift, FutureRiskPrediction, AssessmentStructure, SocialMediaAnalytics, SocialAccount, CreatedCredential, NavigationContext, TeacherMood, Order, OrderStatus, StudentTermReportSubject, UserRoleAssignment, StudentFormData, PayrollUpdateData, CommunicationLogData, ZeroScoreEntry } from './types';
 
@@ -1210,8 +1210,17 @@ const App: React.FC = () => {
     // --- Initialize AI Client ---
     useEffect(() => {
         if (schoolSettings?.ai_settings) {
-            const { openrouter_api_key, default_model } = schoolSettings.ai_settings;
-            if (openrouter_api_key) {
+            const { ai_provider, openrouter_api_key, default_model, ollama_url, ollama_model } = schoolSettings.ai_settings;
+            
+            // Set the provider (default to openrouter if not specified)
+            const provider = ai_provider || 'openrouter';
+            setAIProvider(provider);
+            
+            if (provider === 'ollama') {
+                console.log('[AI] Initializing AI client with Ollama');
+                initializeOllamaAIClient(ollama_url, ollama_model);
+                console.log('[AI] Ollama client initialized successfully');
+            } else if (openrouter_api_key) {
                 console.log('[AI] Initializing AI client with OpenRouter');
                 initializeAIClient(openrouter_api_key, default_model || 'openai/gpt-4o');
                 const error = getAIClientError();

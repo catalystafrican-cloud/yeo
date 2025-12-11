@@ -3,6 +3,7 @@ import { supabase } from '../services/supabaseClient';
 import type { AISettings } from '../types';
 import Spinner from './common/Spinner';
 import { initializeAIClient, getAIClient } from '../services/aiClient';
+import OllamaSettings from './OllamaSettings';
 
 interface OpenRouterSettingsProps {
     schoolId: number;
@@ -23,8 +24,10 @@ const OpenRouterSettings: React.FC<OpenRouterSettingsProps> = ({ schoolId }) => 
     const [testing, setTesting] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [selectedProvider, setSelectedProvider] = useState<'openrouter' | 'ollama'>('openrouter');
     
     const [formData, setFormData] = useState<AISettings>({
+        ai_provider: 'openrouter',
         openrouter_api_key: '',
         default_model: 'openai/gpt-4o',
         is_configured: false
@@ -51,26 +54,34 @@ const OpenRouterSettings: React.FC<OpenRouterSettingsProps> = ({ schoolId }) => 
             
             if (data?.ai_settings) {
                 setFormData({
+                    ai_provider: data.ai_settings.ai_provider || 'openrouter',
                     openrouter_api_key: '', // Don't show the actual key for security
                     default_model: data.ai_settings.default_model || 'openai/gpt-4o',
-                    is_configured: data.ai_settings.is_configured || false
+                    is_configured: data.ai_settings.is_configured || false,
+                    ollama_url: data.ai_settings.ollama_url,
+                    ollama_model: data.ai_settings.ollama_model
                 });
+                setSelectedProvider(data.ai_settings.ai_provider || 'openrouter');
             } else {
                 // No AI settings found, use defaults
                 setFormData({
+                    ai_provider: 'openrouter',
                     openrouter_api_key: '',
                     default_model: 'openai/gpt-4o',
                     is_configured: false
                 });
+                setSelectedProvider('openrouter');
             }
         } catch (error) {
             console.error('Error fetching AI settings:', error);
             // Set defaults even on error
             setFormData({
+                ai_provider: 'openrouter',
                 openrouter_api_key: '',
                 default_model: 'openai/gpt-4o',
                 is_configured: false
             });
+            setSelectedProvider('openrouter');
         } finally {
             setLoading(false);
         }
@@ -88,6 +99,7 @@ const OpenRouterSettings: React.FC<OpenRouterSettingsProps> = ({ schoolId }) => 
         try {
             // Prepare the AI settings object
             const aiSettings: AISettings = {
+                ai_provider: selectedProvider,
                 default_model: formData.default_model,
                 is_configured: true
             };
@@ -195,38 +207,76 @@ const OpenRouterSettings: React.FC<OpenRouterSettingsProps> = ({ schoolId }) => 
                     AI Configuration
                 </h3>
                 <p className="text-sm text-slate-600 dark:text-slate-300">
-                    Configure OpenRouter API for AI-powered features throughout the application.
+                    Configure AI provider for AI-powered features throughout the application.
                 </p>
             </div>
 
-            {/* Configuration Status */}
-            <div className={`p-4 rounded-lg border ${
-                formData.is_configured 
-                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
-                    : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-            }`}>
-                <div className="flex items-center gap-2">
-                    <span className="text-2xl">{formData.is_configured ? '✓' : '⚠️'}</span>
-                    <div>
-                        <p className={`font-semibold ${
-                            formData.is_configured 
-                                ? 'text-green-800 dark:text-green-200' 
-                                : 'text-amber-800 dark:text-amber-200'
-                        }`}>
-                            {formData.is_configured ? 'AI is Configured' : 'AI Not Configured'}
-                        </p>
-                        <p className={`text-sm ${
-                            formData.is_configured 
-                                ? 'text-green-600 dark:text-green-300' 
-                                : 'text-amber-600 dark:text-amber-300'
-                        }`}>
-                            {formData.is_configured 
-                                ? 'AI features are active and ready to use' 
-                                : 'Please configure your OpenRouter API key to enable AI features'}
-                        </p>
-                    </div>
+            {/* Provider Selection */}
+            <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+                    AI Provider
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        onClick={() => setSelectedProvider('openrouter')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                            selectedProvider === 'openrouter'
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-slate-300 dark:border-slate-600 hover:border-blue-300'
+                        }`}
+                    >
+                        <div className="text-2xl mb-2">☁️</div>
+                        <div className="font-semibold text-slate-900 dark:text-white">OpenRouter</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Cloud-based AI</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-500 mt-1">Requires API key</div>
+                    </button>
+                    <button
+                        onClick={() => setSelectedProvider('ollama')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                            selectedProvider === 'ollama'
+                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                : 'border-slate-300 dark:border-slate-600 hover:border-green-300'
+                        }`}
+                    >
+                        <div className="text-2xl mb-2">🖥️</div>
+                        <div className="font-semibold text-slate-900 dark:text-white">Ollama</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">Local AI (Free)</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-500 mt-1">No API key needed</div>
+                    </button>
                 </div>
             </div>
+
+            {/* Conditional rendering based on provider */}
+            {selectedProvider === 'openrouter' ? (
+                <>
+                    {/* Configuration Status */}
+                    <div className={`p-4 rounded-lg border ${
+                        formData.is_configured 
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
+                            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                    }`}>
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">{formData.is_configured ? '✓' : '⚠️'}</span>
+                            <div>
+                                <p className={`font-semibold ${
+                                    formData.is_configured 
+                                        ? 'text-green-800 dark:text-green-200' 
+                                        : 'text-amber-800 dark:text-amber-200'
+                                }`}>
+                                    {formData.is_configured ? 'AI is Configured' : 'AI Not Configured'}
+                                </p>
+                                <p className={`text-sm ${
+                                    formData.is_configured 
+                                        ? 'text-green-600 dark:text-green-300' 
+                                        : 'text-amber-600 dark:text-amber-300'
+                                }`}>
+                                    {formData.is_configured 
+                                        ? 'AI features are active and ready to use' 
+                                        : 'Please configure your OpenRouter API key to enable AI features'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
             {/* API Key Input */}
             <div className="space-y-2">
@@ -343,6 +393,10 @@ const OpenRouterSettings: React.FC<OpenRouterSettingsProps> = ({ schoolId }) => 
                     <li>• Social Media Content</li>
                 </ul>
             </div>
+                </>
+            ) : (
+                <OllamaSettings schoolId={schoolId} />
+            )}
         </div>
     );
 };
