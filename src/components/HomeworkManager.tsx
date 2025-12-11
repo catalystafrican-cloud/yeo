@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Homework, AcademicTeachingAssignment, AcademicClass, UserProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
 import Spinner from './common/Spinner';
-import { PlusIcon, TrashIcon, EditIcon, EyeIcon } from './common/icons';
+import { PlusCircleIcon, TrashIcon, EditIcon, EyeIcon } from './common/icons';
 
 interface HomeworkManagerProps {
     userProfile: UserProfile;
@@ -150,7 +150,7 @@ const HomeworkManager: React.FC<HomeworkManagerProps> = ({
                     onClick={() => setShowForm(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
                 >
-                    <PlusIcon className="h-5 w-5" />
+                    <PlusCircleIcon className="h-5 w-5" />
                     New Homework
                 </button>
             </div>

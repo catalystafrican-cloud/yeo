@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Homework, HomeworkSubmission, StudentProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
 import Spinner from './common/Spinner';
-import { CheckCircleIcon, ClockIcon, UploadIcon, FileIcon } from './common/icons';
+import { CheckCircleIcon, ClockIcon, UploadCloudIcon, FileTextIcon } from './common/icons';
 
 interface StudentHomeworkViewProps {
     studentProfile: StudentProfile;
@@ -210,7 +210,7 @@ const StudentHomeworkView: React.FC<StudentHomeworkViewProps> = ({ studentProfil
                                     onClick={() => setSelectedHomework(hw)}
                                     className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium"
                                 >
-                                    <UploadIcon className="h-4 w-4" />
+                                    <UploadCloudIcon className="h-4 w-4" />
                                     Submit Homework
                                 </button>
                             )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { PublishedLessonPlan, LearningMaterial, StudentProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
 import Spinner from './common/Spinner';
-import { BookOpenIcon, DownloadIcon, EyeIcon, FileIcon } from './common/icons';
+import { BookOpenIcon, DownloadIcon, EyeIcon, FileTextIcon } from './common/icons';
 
 interface StudentLessonPortalProps {
     studentProfile: StudentProfile;
@@ -233,7 +233,7 @@ const StudentLessonPortal: React.FC<StudentLessonPortalProps> = ({ studentProfil
                                                 className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg"
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <FileIcon className="h-5 w-5 text-blue-500" />
+                                                    <FileTextIcon className="h-5 w-5 text-blue-500" />
                                                     <div>
                                                         <p className="font-medium text-slate-800 dark:text-white text-sm">
                                                             {material.title}

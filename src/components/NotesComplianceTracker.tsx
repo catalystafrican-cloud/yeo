@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import Spinner from './common/Spinner';
 import NotifyParentButton from './NotifyParentButton';
 import BulkNotifyButton from './BulkNotifyButton';
-import { CheckCircleIcon, XCircleIcon, ClockIcon, PlusIcon } from './common/icons';
+import { CheckCircleIcon, XCircleIcon, ClockIcon, PlusCircleIcon } from './common/icons';
 
 interface NotesComplianceTrackerProps {
     userProfile: UserProfile;
@@ -200,7 +200,7 @@ const NotesComplianceTracker: React.FC<NotesComplianceTrackerProps> = ({
                     onClick={() => setShowNewCheckForm(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
                 >
-                    <PlusIcon className="h-5 w-5" />
+                    <PlusCircleIcon className="h-5 w-5" />
                     New Notes Check
                 </button>
             </div>

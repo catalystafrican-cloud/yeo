@@ -69,6 +69,13 @@ const PredictiveAnalyticsDashboard = lazy(() => import('./analytics/PredictiveAn
 const ZeroScoreMonitorView = lazy(() => import('./ZeroScoreMonitorView'));
 const CampusStatsReport = lazy(() => import('./CampusStatsReport'));
 
+// Lesson Plan Enhancement Components
+const HomeworkManager = lazy(() => import('./HomeworkManager'));
+const StudentHomeworkView = lazy(() => import('./StudentHomeworkView'));
+const NotesComplianceTracker = lazy(() => import('./NotesComplianceTracker'));
+const StudentLessonPortal = lazy(() => import('./StudentLessonPortal'));
+const NotificationHistory = lazy(() => import('./NotificationHistory'));
+
 interface AppRouterProps {
     currentView: string;
     data: any;
@@ -130,6 +137,18 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                     />;
                  }
                  return <div>Report not found.</div>;
+            case VIEWS.STUDENT_HOMEWORK:
+                return (
+                    <Suspense fallback={<div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>}>
+                        <StudentHomeworkView studentProfile={data.userProfile} />
+                    </Suspense>
+                );
+            case VIEWS.STUDENT_LESSON_PORTAL:
+                return (
+                    <Suspense fallback={<div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>}>
+                        <StudentLessonPortal studentProfile={data.userProfile} />
+                    </Suspense>
+                );
             default:
                 // Redirect unknown to My Subjects
                 return <StudentPortal studentProfile={data.userProfile} addToast={actions.addToast} onLogout={actions.handleLogout} />;
@@ -809,6 +828,31 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                         terms={data.terms}
                         addToast={actions.addToast}
                     />
+                </Suspense>
+            );
+        case VIEWS.HOMEWORK_MANAGER:
+            return (
+                <Suspense fallback={<div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>}>
+                    <HomeworkManager
+                        userProfile={data.userProfile}
+                        teachingAssignments={data.teachingAssignments}
+                        onNavigate={actions.setCurrentView}
+                    />
+                </Suspense>
+            );
+        case VIEWS.NOTES_COMPLIANCE:
+            return (
+                <Suspense fallback={<div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>}>
+                    <NotesComplianceTracker
+                        userProfile={data.userProfile}
+                        teachingAssignments={data.teachingAssignments}
+                    />
+                </Suspense>
+            );
+        case VIEWS.NOTIFICATION_HISTORY:
+            return (
+                <Suspense fallback={<div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>}>
+                    <NotificationHistory userProfile={data.userProfile} />
                 </Suspense>
             );
         default:
