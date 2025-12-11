@@ -5,6 +5,7 @@ import type { StudentTermReportDetails, GradingScheme, StudentInvoice } from '..
 import Spinner from './common/Spinner';
 import { LockClosedIcon, ShieldIcon } from './common/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { getAttendanceStatus, getAttendanceProgressColor, type AttendanceData } from '../utils/attendanceHelpers';
 
 interface StudentReportViewProps {
   studentId: number;
@@ -49,6 +50,73 @@ const PerformanceChart: React.FC<{ data: { name: string, score: number }[], them
         </div>
     );
 }
+
+// Attendance Summary Component
+const AttendanceSummary: React.FC<{ attendance: AttendanceData }> = ({ attendance }) => {
+    const { present, absent, late, excused, unexcused, total, rate } = attendance;
+    const status = getAttendanceStatus(rate);
+    
+    // Show a message if no attendance data
+    if (total === 0) {
+        return (
+            <div className="mt-6 mb-6 border rounded-lg p-4 bg-slate-50 page-break-inside-avoid">
+                <h4 className="text-center font-bold mb-3 text-slate-700 uppercase text-sm">ATTENDANCE SUMMARY</h4>
+                <p className="text-center text-slate-500 py-4">No attendance records available for this term.</p>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="mt-6 mb-6 border rounded-lg p-4 bg-slate-50 page-break-inside-avoid">
+            <h4 className="text-center font-bold mb-4 text-slate-700 uppercase text-sm">ATTENDANCE SUMMARY</h4>
+            
+            {/* Attendance Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Days Present</p>
+                    <p className="text-2xl font-bold text-green-600">{present}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Days Absent</p>
+                    <p className="text-2xl font-bold text-red-600">{absent}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Days Late</p>
+                    <p className="text-2xl font-bold text-orange-600">{late}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Excused Absences</p>
+                    <p className="text-2xl font-bold text-blue-600">{excused}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Unexcused Absences</p>
+                    <p className="text-2xl font-bold text-red-700">{unexcused}</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-slate-500 uppercase">Total Days</p>
+                    <p className="text-2xl font-bold text-slate-700">{total}</p>
+                </div>
+            </div>
+            
+            {/* Attendance Rate Bar */}
+            <div className={`border-2 rounded-lg p-4 ${status.bgColor}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-700">Overall Attendance Rate</span>
+                    <span className={`text-lg font-bold ${status.color}`}>{rate.toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-4 mb-2">
+                    <div 
+                        className={`h-4 rounded-full transition-all ${getAttendanceProgressColor(rate)}`}
+                        style={{ width: `${Math.min(rate, 100)}%` }}
+                    ></div>
+                </div>
+                <p className={`text-center text-sm font-semibold ${status.color}`}>
+                    {status.emoji} {status.label}
+                </p>
+            </div>
+        </div>
+    );
+};
 
 const StudentReportView: React.FC<StudentReportViewProps> = ({ studentId, termId, onBack, isStudentUser = false }) => {
   const [reportDetails, setReportDetails] = useState<StudentTermReportDetails | null>(null);
@@ -458,7 +526,7 @@ const StudentReportView: React.FC<StudentReportViewProps> = ({ studentId, termId
             <div><span className="text-slate-500 font-semibold">Name:</span> <span className="font-bold block md:inline md:ml-1">{student.fullName}</span></div>
             <div><span className="text-slate-500 font-semibold">Class:</span> <span className="font-bold block md:inline md:ml-1">{student.className}</span></div>
             <div><span className="text-slate-500 font-semibold">Admission No:</span> <span className="font-bold block md:inline md:ml-1">{'N/A'}</span></div>
-            <div><span className="text-slate-500 font-semibold">Attendance:</span> <span className="font-bold block md:inline md:ml-1">{attendance.present} / {attendance.possible}</span></div>
+            <div><span className="text-slate-500 font-semibold">Attendance:</span> <span className="font-bold block md:inline md:ml-1">{attendance.rate.toFixed(1)}% ({attendance.present}/{attendance.total})</span></div>
         </div>
     </div>
   );
@@ -596,6 +664,9 @@ const StudentReportView: React.FC<StudentReportViewProps> = ({ studentId, termId
                             />
                         </div>
                     )}
+                    <div className="px-6 pb-4">
+                        <AttendanceSummary attendance={attendance} />
+                    </div>
                     <div className="px-6 pb-6">
                         <h3 className="text-lg font-bold text-slate-800 mb-3 border-b pb-1" style={{ borderColor: themeColor }}>Academic Performance</h3>
                         <table className={commonTableClasses}>
@@ -631,8 +702,10 @@ const StudentReportView: React.FC<StudentReportViewProps> = ({ studentId, termId
                         <div>Avg: <strong>{Number(summary.average).toFixed(2)}%</strong></div>
                         <div>Pos (Arm): <strong>{getOrdinal(summary.positionInArm)}</strong></div>
                         {summary.positionInGradeLevel && <div>Pos (Grade): <strong>{getOrdinal(summary.positionInGradeLevel)}</strong></div>}
-                        <div>Att: <strong>{attendance.present}/{attendance.possible}</strong></div>
+                        <div>Att: <strong>{attendance.rate.toFixed(1)}% ({attendance.present}/{attendance.total})</strong></div>
                     </div>
+                    
+                    <AttendanceSummary attendance={attendance} />
                     
                     {showGraph && (
                         <div className="mb-4">
@@ -696,6 +769,10 @@ const StudentReportView: React.FC<StudentReportViewProps> = ({ studentId, termId
                             />
                         </div>
                     )}
+                    
+                    <div className="mb-8">
+                        <AttendanceSummary attendance={attendance} />
+                    </div>
 
                     <table className="w-full text-sm border-collapse border border-black mb-8">
                         {renderTableHeader()}
