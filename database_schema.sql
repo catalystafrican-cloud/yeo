@@ -2149,5 +2149,222 @@ CREATE INDEX IF NOT EXISTS idx_academic_classes_sync_lookup
     ON academic_classes(school_id, level, arm, is_active)
     WHERE is_active = TRUE;
 
+-- ============================================
+-- LESSON PLAN ENHANCEMENT TABLES
+-- ============================================
+
+-- 1. Per-Arm Coverage Tracking
+CREATE TABLE IF NOT EXISTS public.lesson_plan_coverage (
+    id SERIAL PRIMARY KEY,
+    lesson_plan_id INTEGER REFERENCES public.lesson_plans(id) ON DELETE CASCADE,
+    academic_class_id INTEGER REFERENCES public.academic_classes(id) ON DELETE CASCADE,
+    arm_id INTEGER,
+    coverage_status TEXT DEFAULT 'Pending', -- Pending, Fully Covered, Partially Covered, Not Covered
+    coverage_percentage INTEGER DEFAULT 0,
+    topics_covered TEXT,
+    topics_pending TEXT,
+    notes TEXT,
+    covered_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Learning Materials
+CREATE TABLE IF NOT EXISTS public.learning_materials (
+    id SERIAL PRIMARY KEY,
+    school_id INTEGER REFERENCES public.schools(id) ON DELETE CASCADE,
+    lesson_plan_id INTEGER REFERENCES public.lesson_plans(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    material_type TEXT DEFAULT 'document', -- pdf, video, link, document, presentation
+    file_url TEXT,
+    external_url TEXT,
+    tags TEXT[],
+    is_shared BOOLEAN DEFAULT FALSE,
+    is_published BOOLEAN DEFAULT FALSE,
+    uploaded_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Student Material Access Tracking
+CREATE TABLE IF NOT EXISTS public.student_material_access (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER REFERENCES public.students(id) ON DELETE CASCADE,
+    material_id INTEGER REFERENCES public.learning_materials(id) ON DELETE CASCADE,
+    accessed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(student_id, material_id)
+);
+
+-- 4. Lesson Plan Reviews (Approval Workflow)
+CREATE TABLE IF NOT EXISTS public.lesson_plan_reviews (
+    id SERIAL PRIMARY KEY,
+    lesson_plan_id INTEGER REFERENCES public.lesson_plans(id) ON DELETE CASCADE,
+    reviewer_id UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    review_status TEXT DEFAULT 'pending', -- pending, approved, rejected, revision_requested
+    feedback TEXT,
+    revision_notes TEXT,
+    reviewed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Homework Management
+CREATE TABLE IF NOT EXISTS public.homework (
+    id SERIAL PRIMARY KEY,
+    school_id INTEGER REFERENCES public.schools(id) ON DELETE CASCADE,
+    lesson_plan_id INTEGER REFERENCES public.lesson_plans(id) ON DELETE SET NULL,
+    teaching_assignment_id INTEGER REFERENCES public.teaching_assignments(id) ON DELETE CASCADE,
+    academic_class_id INTEGER REFERENCES public.academic_classes(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    instructions TEXT,
+    due_date DATE NOT NULL,
+    due_time TIME,
+    max_score INTEGER DEFAULT 100,
+    is_graded BOOLEAN DEFAULT TRUE,
+    allow_late_submission BOOLEAN DEFAULT FALSE,
+    late_penalty_percent INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'active', -- active, closed, archived
+    notify_parents BOOLEAN DEFAULT FALSE,
+    created_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 6. Homework Attachments
+CREATE TABLE IF NOT EXISTS public.homework_attachments (
+    id SERIAL PRIMARY KEY,
+    homework_id INTEGER REFERENCES public.homework(id) ON DELETE CASCADE,
+    file_url TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER,
+    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 7. Homework Submissions
+CREATE TABLE IF NOT EXISTS public.homework_submissions (
+    id SERIAL PRIMARY KEY,
+    homework_id INTEGER REFERENCES public.homework(id) ON DELETE CASCADE,
+    student_id INTEGER REFERENCES public.students(id) ON DELETE CASCADE,
+    submission_status TEXT DEFAULT 'pending', -- pending, submitted, late, missing
+    submitted_at TIMESTAMP WITH TIME ZONE,
+    submission_text TEXT,
+    submission_files TEXT[], -- Array of file URLs
+    score NUMERIC,
+    feedback TEXT,
+    graded_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    graded_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(homework_id, student_id)
+);
+
+-- 8. Notes Compliance Tracking
+CREATE TABLE IF NOT EXISTS public.notes_checks (
+    id SERIAL PRIMARY KEY,
+    school_id INTEGER REFERENCES public.schools(id) ON DELETE CASCADE,
+    teaching_assignment_id INTEGER REFERENCES public.teaching_assignments(id) ON DELETE CASCADE,
+    academic_class_id INTEGER REFERENCES public.academic_classes(id) ON DELETE CASCADE,
+    check_date DATE NOT NULL,
+    topic TEXT NOT NULL,
+    checked_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 9. Notes Compliance Records
+CREATE TABLE IF NOT EXISTS public.notes_compliance (
+    id SERIAL PRIMARY KEY,
+    notes_check_id INTEGER REFERENCES public.notes_checks(id) ON DELETE CASCADE,
+    student_id INTEGER REFERENCES public.students(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'incomplete', -- complete, incomplete, partial
+    notes TEXT,
+    checked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(notes_check_id, student_id)
+);
+
+-- 10. WhatsApp Message Templates
+CREATE TABLE IF NOT EXISTS public.whatsapp_templates (
+    id SERIAL PRIMARY KEY,
+    school_id INTEGER REFERENCES public.schools(id) ON DELETE CASCADE,
+    template_name TEXT NOT NULL, -- homework_reminder, homework_missing, notes_incomplete, lesson_published
+    template_type TEXT NOT NULL, -- template, conversational
+    template_id TEXT, -- Termii template ID if using templates
+    message_content TEXT NOT NULL,
+    variables TEXT[], -- Array of variable placeholders
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(school_id, template_name)
+);
+
+-- 11. WhatsApp Notifications Log
+CREATE TABLE IF NOT EXISTS public.whatsapp_notifications (
+    id SERIAL PRIMARY KEY,
+    school_id INTEGER REFERENCES public.schools(id) ON DELETE CASCADE,
+    student_id INTEGER REFERENCES public.students(id) ON DELETE CASCADE,
+    recipient_phone TEXT NOT NULL,
+    template_name TEXT,
+    message_content TEXT,
+    notification_type TEXT, -- homework_reminder, homework_missing, notes_incomplete, lesson_published
+    reference_id INTEGER, -- ID of related entity (homework_id, notes_check_id, etc.)
+    status TEXT DEFAULT 'pending', -- pending, sent, delivered, failed
+    termii_message_id TEXT,
+    error_message TEXT,
+    sent_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Update lesson_plans table with new fields for publishing
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='published_at') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN published_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='published_by') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN published_by UUID REFERENCES public.user_profiles(id) ON DELETE SET NULL;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='publish_target') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN publish_target TEXT; -- 'all', 'class', 'arm'
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='smart_goals') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN smart_goals TEXT;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='sessions') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN sessions JSONB;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='lesson_plans' AND column_name='grade_level') THEN
+        ALTER TABLE public.lesson_plans ADD COLUMN grade_level TEXT;
+    END IF;
+END $$;
+
+-- Add whatsapp_settings to schools table
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='schools' AND column_name='whatsapp_settings') THEN
+        ALTER TABLE public.schools ADD COLUMN whatsapp_settings JSONB DEFAULT '{}';
+    END IF;
+END $$;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_lesson_plan_coverage_lesson_id ON public.lesson_plan_coverage(lesson_plan_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_plan_coverage_class_id ON public.lesson_plan_coverage(academic_class_id);
+CREATE INDEX IF NOT EXISTS idx_learning_materials_lesson_id ON public.learning_materials(lesson_plan_id);
+CREATE INDEX IF NOT EXISTS idx_learning_materials_published ON public.learning_materials(is_published) WHERE is_published = TRUE;
+CREATE INDEX IF NOT EXISTS idx_lesson_plan_reviews_plan_id ON public.lesson_plan_reviews(lesson_plan_id);
+CREATE INDEX IF NOT EXISTS idx_lesson_plan_reviews_status ON public.lesson_plan_reviews(review_status);
+CREATE INDEX IF NOT EXISTS idx_homework_class_id ON public.homework(academic_class_id);
+CREATE INDEX IF NOT EXISTS idx_homework_due_date ON public.homework(due_date);
+CREATE INDEX IF NOT EXISTS idx_homework_submissions_homework_id ON public.homework_submissions(homework_id);
+CREATE INDEX IF NOT EXISTS idx_homework_submissions_student_id ON public.homework_submissions(student_id);
+CREATE INDEX IF NOT EXISTS idx_notes_compliance_check_id ON public.notes_compliance(notes_check_id);
+CREATE INDEX IF NOT EXISTS idx_notes_compliance_student_id ON public.notes_compliance(student_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_notifications_student_id ON public.whatsapp_notifications(student_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_notifications_status ON public.whatsapp_notifications(status);
+
 -- Reload PostgREST schema cache
 NOTIFY pgrst, 'reload config';

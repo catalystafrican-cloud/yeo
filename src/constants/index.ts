@@ -135,6 +135,14 @@ export const VIEWS = {
   PREDICTIVE_ANALYTICS: 'Predictive Analytics',
   SCORE_REVIEW: 'Score Review', // Team Lead/Admin view of all scores
   CAMPUS_STATISTICS: 'Campus Statistics',
+  // Lesson Plan Enhancement Views
+  COVERAGE_DASHBOARD: 'Coverage Dashboard',
+  REVIEW_DASHBOARD: 'Review Dashboard',
+  STUDENT_LESSON_PORTAL: 'Student Lessons',
+  HOMEWORK_MANAGER: 'Homework Manager',
+  STUDENT_HOMEWORK: 'My Homework',
+  NOTES_COMPLIANCE: 'Notes Compliance',
+  NOTIFICATION_HISTORY: 'Notification History',
 } as const;
 
 export const STUDENT_STATUSES = [
