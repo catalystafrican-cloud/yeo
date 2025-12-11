@@ -289,7 +289,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, userProfile,
                                     e.preventDefault(); 
                                     if (!item.id) {
                                       console.error('[Sidebar] Navigation failed: item.id is undefined for item:', item.label);
-                                      // Fallback to using the label as the view ID
+                                      console.warn('[Sidebar] This indicates a missing VIEWS constant. Check src/constants.ts');
+                                      // Fallback to using the label as the view ID (labels match VIEWS values)
                                       onNavigate(item.label);
                                     } else {
                                       console.log('[Sidebar] Navigating to:', item.id, 'from:', currentView);
