@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supa as supabase } from '../offline/client';
 import type { Student, GradingScheme, SchoolConfig } from '../types';
 import Spinner from './common/Spinner';
 import { CloseIcon, DownloadIcon, CheckCircleIcon, AlertCircleIcon } from './common/icons';
@@ -15,8 +15,8 @@ interface BulkReportCardGeneratorProps {
   students: Student[];
   onClose: () => void;
   addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-  schoolConfig: SchoolConfig | null; // eslint-disable-line @typescript-eslint/no-unused-vars
-  gradingSchemes: GradingScheme[]; // eslint-disable-line @typescript-eslint/no-unused-vars
+  schoolConfig: SchoolConfig | null;
+  gradingSchemes: GradingScheme[];
 }
 
 interface StudentWithDebt extends Student {
@@ -24,6 +24,38 @@ interface StudentWithDebt extends Student {
   outstandingAmount: number;
   averageScore?: number;
   reportExists: boolean;
+}
+
+interface ReportSubject {
+  subjectName: string;
+  totalScore?: number;
+  grade?: string;
+  remark?: string;
+}
+
+interface ReportData {
+  student: {
+    fullName: string;
+    className: string;
+  };
+  term: {
+    sessionLabel: string;
+    termLabel: string;
+  };
+  subjects: ReportSubject[];
+  schoolConfig: {
+    school_name?: string;
+    address?: string;
+    motto?: string;
+  };
+  summary?: {
+    positionInArm?: number | string;
+    totalStudentsInArm?: number | string;
+  };
+  comments?: {
+    teacher?: string;
+    principal?: string;
+  };
 }
 
 const BulkReportCardGenerator: React.FC<BulkReportCardGeneratorProps> = ({
@@ -202,7 +234,7 @@ const BulkReportCardGenerator: React.FC<BulkReportCardGeneratorProps> = ({
     }
   };
 
-  const createReportHTML = (reportData: any, student: StudentWithDebt): string => {
+  const createReportHTML = (reportData: ReportData, student: StudentWithDebt): string => {
     const { student: studentData, term, subjects, schoolConfig: config } = reportData;
     const averageScore = subjects.reduce((sum: number, s: any) => sum + (s.totalScore || 0), 0) / subjects.length;
 
@@ -239,7 +271,7 @@ const BulkReportCardGenerator: React.FC<BulkReportCardGeneratorProps> = ({
             </tr>
           </thead>
           <tbody>
-            ${subjects.map((sub: any, index: number) => `
+            ${subjects.map((sub: ReportSubject, index: number) => `
               <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f9fafb'};">
                 <td style="border: 1px solid #ddd; padding: 8px;">${sub.subjectName}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${sub.totalScore?.toFixed(1) || '0'}</td>
