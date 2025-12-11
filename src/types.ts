@@ -396,7 +396,12 @@ export interface LessonPlan {
     coverage_status: CoverageStatus;
     coverage_notes?: string | null;
     
-    status: 'draft' | 'submitted' | 'approved' | 'rejected';
+    status: 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'revision_required' | 'published';
+    
+    // Publishing fields
+    published_at?: string | null;
+    published_by?: string | null;
+    publish_target?: 'all' | 'class' | 'arm' | null;
 
     author_id: string;
     created_at: string;
@@ -1534,4 +1539,172 @@ export interface ZeroScoreEntry {
     teacher?: UserProfile;
     academic_class?: AcademicClass;
     term?: Term;
+}
+
+// ============================================
+// Lesson Plan Enhancement Types
+// ============================================
+
+export interface LessonPlanCoverage {
+    id: number;
+    lesson_plan_id: number;
+    academic_class_id: number;
+    arm_id: number;
+    coverage_status: 'Pending' | 'Fully Covered' | 'Partially Covered' | 'Not Covered';
+    coverage_percentage: number;
+    topics_covered?: string;
+    topics_pending?: string;
+    notes?: string;
+    covered_date?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface LearningMaterial {
+    id: number;
+    school_id: number;
+    lesson_plan_id: number;
+    title: string;
+    description?: string;
+    material_type: 'pdf' | 'video' | 'link' | 'document' | 'presentation';
+    file_url?: string;
+    external_url?: string;
+    tags?: string[];
+    is_shared: boolean;
+    is_published: boolean;
+    uploaded_by?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface StudentMaterialAccess {
+    id: number;
+    student_id: number;
+    material_id: number;
+    accessed_at: string;
+}
+
+export interface LessonPlanReview {
+    id: number;
+    lesson_plan_id: number;
+    reviewer_id: string;
+    review_status: 'pending' | 'approved' | 'rejected' | 'revision_requested';
+    feedback?: string;
+    revision_notes?: string;
+    reviewed_at: string;
+    created_at: string;
+    reviewer?: UserProfile;
+}
+
+export interface PublishedLessonPlan extends LessonPlan {
+    published_at: string;
+    published_by: string;
+    publish_target: 'all' | 'class' | 'arm';
+    materials?: LearningMaterial[];
+}
+
+export interface Homework {
+    id: number;
+    school_id: number;
+    lesson_plan_id?: number | null;
+    teaching_assignment_id: number;
+    academic_class_id: number;
+    title: string;
+    description?: string;
+    instructions?: string;
+    due_date: string;
+    due_time?: string;
+    max_score: number;
+    is_graded: boolean;
+    allow_late_submission: boolean;
+    late_penalty_percent: number;
+    status: 'active' | 'closed' | 'archived';
+    notify_parents: boolean;
+    created_by?: string;
+    created_at: string;
+    updated_at: string;
+    teaching_assignment?: AcademicTeachingAssignment;
+    academic_class?: AcademicClass;
+    attachments?: HomeworkAttachment[];
+}
+
+export interface HomeworkAttachment {
+    id: number;
+    homework_id: number;
+    file_url: string;
+    file_name: string;
+    file_type?: string;
+    file_size?: number;
+    uploaded_at: string;
+}
+
+export interface HomeworkSubmission {
+    id: number;
+    homework_id: number;
+    student_id: number;
+    submission_status: 'pending' | 'submitted' | 'late' | 'missing';
+    submitted_at?: string;
+    submission_text?: string;
+    submission_files?: string[];
+    score?: number;
+    feedback?: string;
+    graded_by?: string;
+    graded_at?: string;
+    created_at: string;
+    updated_at: string;
+    student?: Student;
+}
+
+export interface NotesCheck {
+    id: number;
+    school_id: number;
+    teaching_assignment_id: number;
+    academic_class_id: number;
+    check_date: string;
+    topic: string;
+    checked_by?: string;
+    created_at: string;
+    teaching_assignment?: AcademicTeachingAssignment;
+    academic_class?: AcademicClass;
+}
+
+export interface NotesCompliance {
+    id: number;
+    notes_check_id: number;
+    student_id: number;
+    status: 'complete' | 'incomplete' | 'partial';
+    notes?: string;
+    checked_at: string;
+    student?: Student;
+}
+
+export interface WhatsAppTemplate {
+    id: number;
+    school_id: number;
+    template_name: string;
+    template_type: 'template' | 'conversational';
+    template_id?: string;
+    message_content: string;
+    variables?: string[];
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface WhatsAppNotification {
+    id: number;
+    school_id: number;
+    student_id: number;
+    recipient_phone: string;
+    template_name?: string;
+    message_content?: string;
+    notification_type: 'homework_reminder' | 'homework_missing' | 'notes_incomplete' | 'lesson_published';
+    reference_id?: number;
+    status: 'pending' | 'sent' | 'delivered' | 'failed';
+    termii_message_id?: string;
+    error_message?: string;
+    sent_by?: string;
+    sent_at?: string;
+    created_at: string;
+    student?: Student;
 }
