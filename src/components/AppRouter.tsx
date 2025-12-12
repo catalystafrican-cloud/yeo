@@ -55,6 +55,10 @@ import StudentRateMyTeacherView from './StudentRateMyTeacherView';
 import StudentReportList from './StudentReportList';
 import StudentSurveysView from './StudentSurveysView';
 import QuizTakerView from './QuizTakerView';
+import StudentDashboard from './StudentDashboard';
+import StudentProfileEdit from './StudentProfileEdit';
+import StudentStrikeAppeals from './StudentStrikeAppeals';
+import StudentSubjectChoicesView from './admin/StudentSubjectChoicesView';
 
 // Lazy load heavy components and those used dynamically elsewhere to fix build warnings and reduce chunk size
 const TimetableView = lazy(() => import('./TimetableView'));
@@ -91,6 +95,25 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
     // --- Student Views ---
     if (data.userType === 'student') {
         switch (baseView) {
+            case VIEWS.STUDENT_DASHBOARD:
+                return <StudentDashboard
+                    studentProfile={data.userProfile}
+                    addToast={actions.addToast}
+                    onNavigate={actions.setCurrentView}
+                    isDarkMode={data.isDarkMode}
+                />;
+            case VIEWS.STUDENT_PROFILE_EDIT:
+                return <StudentProfileEdit
+                    studentProfile={data.userProfile}
+                    addToast={actions.addToast}
+                    onNavigate={actions.setCurrentView}
+                />;
+            case VIEWS.STUDENT_STRIKES:
+                return <StudentStrikeAppeals
+                    studentProfile={data.userProfile}
+                    addToast={actions.addToast}
+                    onNavigate={actions.setCurrentView}
+                />;
             case VIEWS.MY_SUBJECTS:
                 return <StudentPortal 
                     studentProfile={data.userProfile} 
@@ -306,6 +329,11 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
                 userPermissions={data.userPermissions}
                 onUpdatePlan={actions.handleUpdateSIP}
                 studentIdToSelect={param1 ? Number(param1) : undefined}
+            />;
+        case VIEWS.STUDENT_SUBJECT_CHOICES_ADMIN:
+            return <StudentSubjectChoicesView
+                schoolId={data.userProfile.school_id}
+                addToast={actions.addToast}
             />;
         case VIEWS.ANALYTICS:
             return <AnalyticsView 

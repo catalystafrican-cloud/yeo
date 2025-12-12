@@ -79,6 +79,7 @@ const NAV_STRUCTURE: NavGroup[] = [
       { id: VIEWS.STUDENT_ROSTER, label: 'Student Roster', permission: 'manage-students' },
       { id: VIEWS.INTERVENTION_PLANS, label: 'Intervention Plans', permission: 'manage-students' },
       { id: VIEWS.ABSENCE_REQUESTS, label: 'Absence Requests', permission: 'view-dashboard' },
+      { id: VIEWS.STUDENT_SUBJECT_CHOICES_ADMIN, label: 'Subject Choices', permission: 'manage-students' },
       { id: VIEWS.ID_CARDS, label: 'ID Card Generator', permission: 'manage-students' },
       { id: VIEWS.REWARDS_STORE, label: 'Rewards Store', permission: 'manage-students' },
     ]

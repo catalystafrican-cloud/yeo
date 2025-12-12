@@ -73,10 +73,13 @@ export const ALL_PERMISSIONS: string[] = [
 export const VIEWS = {
   DASHBOARD: 'Dashboard',
   STUDENT_PORTAL: 'Student Portal',
+  STUDENT_DASHBOARD: 'Student Dashboard',
   MY_SUBJECTS: 'My Subjects',
   RATE_MY_TEACHER: 'Rate My Teacher',
   STUDENT_REPORTS: 'Student Reports',
   STUDENT_SURVEYS: 'Student Surveys',
+  STUDENT_PROFILE_EDIT: 'Student Profile Edit',
+  STUDENT_STRIKES: 'My Strikes & Appeals',
   TAKE_QUIZ: 'Take Quiz',
   TAKE_SURVEY: 'Take Survey',
   SUBMIT_REPORT: 'Submit Report',
@@ -144,6 +147,7 @@ export const VIEWS = {
   NOTES_COMPLIANCE: 'Notes Compliance',
   NOTIFICATION_HISTORY: 'Notification History',
   ABSENCE_REQUESTS: 'Absence Requests',
+  STUDENT_SUBJECT_CHOICES_ADMIN: 'Student Subject Choices',
 } as const;
 
 export const STUDENT_STATUSES = [

@@ -67,6 +67,16 @@ export interface Student {
      * Format may vary by payment provider (e.g., Paystack, Wema Bank)
      */
     dva?: string;
+    // Editable profile fields
+    phone?: string;
+    street_address?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    emergency_contact_relationship?: string;
 }
 
 export enum StudentStatus {
@@ -1802,4 +1812,52 @@ export interface AbsenceRequest {
     student?: Student;
     requester?: UserProfile;
     reviewer?: UserProfile;
+}
+
+// Student Strikes and Appeals
+export type StrikeSeverity = 'Minor' | 'Major' | 'Severe';
+export type StrikeAppealStatus = 'Pending' | 'Under Review' | 'Approved' | 'Rejected';
+
+export interface StudentStrike {
+    id: number;
+    student_id: number;
+    school_id: number;
+    reason: string;
+    severity: StrikeSeverity;
+    issued_by: string;
+    issued_date: string;
+    notes?: string;
+    archived: boolean;
+    created_at: string;
+    updated_at: string;
+    // Joined data
+    student?: Student;
+    issuer?: UserProfile;
+    appeal?: StrikeAppeal;
+}
+
+export interface StrikeAppeal {
+    id: number;
+    strike_id: number;
+    student_id: number;
+    appeal_reason: string;
+    supporting_details?: string;
+    status: StrikeAppealStatus;
+    reviewed_by?: string;
+    reviewed_at?: string;
+    review_notes?: string;
+    created_at: string;
+    updated_at: string;
+    // Joined data
+    strike?: StudentStrike;
+    student?: Student;
+    reviewer?: UserProfile;
+}
+
+export interface StudentDashboardStats {
+    attendancePercentage: number;
+    pendingAssignments: number;
+    totalStrikes: number;
+    rewardPoints: number;
+    pendingAbsenceRequests: number;
 }
