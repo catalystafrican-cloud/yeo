@@ -138,8 +138,8 @@ const TeacherScoreEntryView: React.FC<TeacherScoreEntryViewProps> = ({
         setLocalComments(prev => ({ ...prev, [studentId]: value }));
     };
 
-    const handleSave = async () => {
-        if (!assignment) return;
+    const handleSave = async (): Promise<boolean> => {
+        if (!assignment) return false;
         setIsSaving(true);
 
         const entriesToSave: Partial<ScoreEntry>[] = enrolledStudents.map(student => {
@@ -188,12 +188,22 @@ const TeacherScoreEntryView: React.FC<TeacherScoreEntryViewProps> = ({
         } else {
             addToast('Scores saved successfully.', 'success');
         }
+        return success;
     };
     
     const handleSubmit = async () => {
         if (!assignment) return;
         if(window.confirm("Are you sure you want to submit these scores for review? You may not be able to edit them afterwards.")) {
             setIsSubmitting(true);
+            
+            // First save the scores to the database
+            const saveSuccess = await handleSave();
+            if (!saveSuccess) {
+                setIsSubmitting(false);
+                return; // Don't proceed if save failed
+            }
+            
+            // Then mark as submitted
             const success = await onSubmitForReview(assignment.id);
             setIsSubmitting(false);
             if(success) {
