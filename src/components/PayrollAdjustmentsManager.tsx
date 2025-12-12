@@ -90,7 +90,8 @@ const PayrollAdjustmentsManager: React.FC<PayrollAdjustmentsManagerProps> = ({ u
     const handleSave = async (data: Partial<Omit<PayrollAdjustment, 'id' | 'user_id'>> & { id?: number, user_ids?: string[] }) => {
         const { user_ids, id, ...rest } = data;
         
-        const amount = rest.adjustment_type === 'deduction' ? -Math.abs(Number(rest.amount)) : Math.abs(Number(rest.amount));
+        // Fix: Store all amounts as positive values to prevent double-negation bug where deductions were incorrectly added instead of subtracted during payroll calculation
+        const amount = Math.abs(Number(rest.amount));
 
         if (id) {
             // Update existing
