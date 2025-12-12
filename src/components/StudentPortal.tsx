@@ -70,23 +70,21 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ studentProfile, addToast,
             // Ideally, fetch all subjects available in the school or linked to the generic class level
             // 'class_subjects' links generic class (e.g. JSS 1) to subjects.
             let fetchedSubjects: {subject_id: number, subject_name: string, is_compulsory: boolean}[] = [];
-            if (studentProfile.class_id) {
-                const { data: classSubjects, error: classSubjectsError } = await supabase
-                    .from('class_subjects')
-                    .select('subject_id, is_compulsory, subjects(name)')
-                    .eq('class_id', studentProfile.class_id);
+            const { data: classSubjects, error: classSubjectsError } = await supabase
+                .from('class_subjects')
+                .select('subject_id, is_compulsory, subjects(name)')
+                .eq('class_id', studentProfile.class_id);
 
-                if (classSubjectsError) {
-                    console.error(classSubjectsError);
-                    addToast('Error fetching available subjects.', 'error');
-                } else {
-                    fetchedSubjects = classSubjects ? classSubjects.map((s:any) => ({ 
-                        subject_id: s.subject_id, 
-                        subject_name: s.subjects.name,
-                        is_compulsory: s.is_compulsory || false
-                    })).sort((a,b) => a.subject_name.localeCompare(b.subject_name)) : [];
-                    setAvailableSubjects(fetchedSubjects);
-                }
+            if (classSubjectsError) {
+                console.error(classSubjectsError);
+                addToast('Error fetching available subjects.', 'error');
+            } else {
+                fetchedSubjects = classSubjects ? classSubjects.map((s:any) => ({ 
+                    subject_id: s.subject_id, 
+                    subject_name: s.subjects.name,
+                    is_compulsory: s.is_compulsory || false
+                })).sort((a,b) => a.subject_name.localeCompare(b.subject_name)) : [];
+                setAvailableSubjects(fetchedSubjects);
             }
 
             // 3. Fetch existing choices & Merge Compulsory
