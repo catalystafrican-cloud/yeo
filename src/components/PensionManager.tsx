@@ -94,14 +94,31 @@ const PensionManager: React.FC<PensionManagerProps> = ({ users, schoolId, addToa
 
     const totalPages = Math.ceil(filteredStaff.length / ITEMS_PER_PAGE);
 
-    // Get pension config for a staff member
+    // Get pension config for a staff member - memoized for performance
+    const pensionConfigMap = useMemo(() => {
+        const map = new Map<string, StaffPension>();
+        staffPensions.forEach(p => map.set(p.user_id, p));
+        return map;
+    }, [staffPensions]);
+
+    // Get contributions for a staff member - memoized for performance
+    const contributionsMap = useMemo(() => {
+        const map = new Map<string, PensionContribution[]>();
+        contributions.forEach(c => {
+            if (!map.has(c.user_id)) {
+                map.set(c.user_id, []);
+            }
+            map.get(c.user_id)!.push(c);
+        });
+        return map;
+    }, [contributions]);
+
     const getPensionConfig = (userId: string): StaffPension | undefined => {
-        return staffPensions.find(p => p.user_id === userId);
+        return pensionConfigMap.get(userId);
     };
 
-    // Get contributions for a staff member
     const getContributions = (userId: string): PensionContribution[] => {
-        return contributions.filter(c => c.user_id === userId);
+        return contributionsMap.get(userId) || [];
     };
 
     const handleEdit = (staff: UserProfile) => {

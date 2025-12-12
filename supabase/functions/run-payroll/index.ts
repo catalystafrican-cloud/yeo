@@ -243,7 +243,7 @@ serve(async (req) => {
             net_amount: net_amount,
             narration: item.narration || reason,
             paystack_recipient_code: recipientCode,
-            pensionContributionData: pensionContributionData // Store for later
+            pensionData: pensionContributionData // Store for later
         });
     }
 
@@ -265,7 +265,7 @@ serve(async (req) => {
 
     // 3. Associate items with the run and insert them
     const finalItemsToInsert = itemsToInsert.map(item => {
-        const { pensionContributionData, ...payrollItem } = item;
+        const { pensionData, ...payrollItem } = item;
         return { ...payrollItem, payroll_run_id: runData.id };
     });
     const { data: insertedItems, error: itemsError } = await adminClient
@@ -277,9 +277,9 @@ serve(async (req) => {
 
     // 3b. Create pension contribution records
     const pensionContributionsToInsert = itemsToInsert
-        .filter(item => item.pensionContributionData)
+        .filter(item => item.pensionData)
         .map(item => ({
-            ...item.pensionContributionData,
+            ...item.pensionData,
             payroll_run_id: runData.id
         }));
 
