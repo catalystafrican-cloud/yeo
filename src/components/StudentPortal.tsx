@@ -33,7 +33,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ studentProfile, addToast,
             // Early validation for required fields
             if (!studentProfile.student_record_id) {
                 addToast('Student record not found. Please contact administrator.', 'error');
-                setIsLoading(false);
                 return;
             }
 
@@ -42,7 +41,6 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ studentProfile, addToast,
                 console.warn('Student has no class_id assigned');
                 // Still allow the component to render, just show empty subjects
                 setAvailableSubjects([]);
-                setIsLoading(false);
                 return;
             }
 
