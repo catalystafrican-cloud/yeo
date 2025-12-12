@@ -879,11 +879,12 @@ const App: React.FC = () => {
                         ];
 
                         // PHASE 2: Background data that can load after UI is shown
-                        // NOTE: Supabase defaults to 1000 row limit. Tables with potentially large datasets
+                        // NOTE: Supabase defaults to 1000 row limit. Queries for large tables
                         // must specify explicit .limit() to ensure all data is fetched.
-                        // Large tables with limits: academic_class_students, score_entries, 
-                        // student_term_reports, student_term_report_subjects, teaching_assignments, 
-                        // lesson_plans, notifications, positive_behavior, student_awards, quiz_responses.
+                        // Limits added below: academic_class_students (10000), score_entries (50000),
+                        // student_term_reports (10000), student_term_report_subjects (50000),
+                        // teaching_assignments (5000), lesson_plans (10000), positive_behavior (10000),
+                        // student_awards (10000), quiz_responses (10000), notifications (5000).
                         const backgroundQueries = [
                             supabase.from('announcements').select('*, author:user_profiles(name)').order('created_at', { ascending: false }),
                             supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5000),

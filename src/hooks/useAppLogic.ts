@@ -192,11 +192,11 @@ export const useAppLogic = () => {
                 supabase.from('campuses').select('*'),
                 supabase.from('teams').select('*, lead:user_profiles(name), members:team_assignments(user_id, profile:user_profiles(name))'),
                 supabase.from('calendar_events').select('*'),
-                // NOTE: Supabase defaults to 1000 row limit. Tables with potentially large datasets
+                // NOTE: Supabase defaults to 1000 row limit. Queries for large tables
                 // must specify explicit .limit() to ensure all data is fetched.
-                // Large tables with limits: academic_class_students, score_entries, attendance_records,
-                // student_term_reports, teaching_assignments, lesson_plans, student_awards.
-                // Note: students table uses fetchAllStudents() with pagination.
+                // Limits added below: teaching_assignments (5000), lesson_plans (10000),
+                // score_entries (50000), attendance_records (50000), student_awards (10000),
+                // academic_class_students (10000). Students table uses fetchAllStudents() pagination.
                 supabase.from('classes').select('*').order('name'),
                 supabase.from('arms').select('*').order('name'),
                 supabase.from('subjects').select('*').order('name'),
