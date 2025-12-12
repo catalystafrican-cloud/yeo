@@ -210,7 +210,7 @@ const TeacherScoreEntryView: React.FC<TeacherScoreEntryViewProps> = ({
                 onBack();
             }
         }
-    }
+    };
 
     const downloadTemplate = () => {
         if (!assignment || !enrolledStudents.length) {
