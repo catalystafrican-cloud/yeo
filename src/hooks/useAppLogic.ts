@@ -192,10 +192,14 @@ export const useAppLogic = () => {
                 supabase.from('campuses').select('*'),
                 supabase.from('teams').select('*, lead:user_profiles(name), members:team_assignments(user_id, profile:user_profiles(name))'),
                 supabase.from('calendar_events').select('*'),
+                // NOTE: Supabase defaults to 1000 row limit. Tables with potentially large datasets
+                // must specify explicit .limit() to ensure all data is fetched.
+                // Tables with limits > 1000: academic_class_students, students, score_entries, 
+                // attendance_records, student_term_reports, student_term_report_subjects, etc.
                 supabase.from('classes').select('*').order('name'),
                 supabase.from('arms').select('*').order('name'),
                 supabase.from('subjects').select('*').order('name'),
-                supabase.from('teaching_assignments').select('*, teacher:user_profiles(name), subject:subjects(name), academic_class:academic_classes(name)'),
+                supabase.from('teaching_assignments').select('*, teacher:user_profiles(name), subject:subjects(name), academic_class:academic_classes(name)').limit(5000),
                 supabase.from('academic_classes').select('*, assessment_structure:assessment_structures(*)'),
                 supabase.from('terms').select('*').order('start_date', { ascending: false }),
                 supabase.from('school_config').select('*').maybeSingle(),
@@ -203,11 +207,11 @@ export const useAppLogic = () => {
                 supabase.from('leave_requests').select('*, requester:user_profiles(name), leave_type:leave_types(name)'),
                 supabase.from('leave_types').select('*'),
                 supabase.from('quizzes').select('*, questions:quiz_questions(*)'), // Surveys
-                supabase.from('lesson_plans').select('*, author:user_profiles(name), teaching_entity:teaching_assignments(*)'),
+                supabase.from('lesson_plans').select('*, author:user_profiles(name), teaching_entity:teaching_assignments(*)').limit(10000),
                 supabase.from('assessments').select('*'),
                 supabase.from('assessment_scores').select('*'),
-                supabase.from('score_entries').select('*'),
-                supabase.from('attendance_records').select('*'),
+                supabase.from('score_entries').select('*').limit(50000),
+                supabase.from('attendance_records').select('*').limit(50000),
                 supabase.from('class_groups').select('*, members:class_group_members(*, schedules:attendance_schedules(*), records:attendance_records(*))'),
                 supabase.from('payroll_runs').select('*, items:payroll_items(*, user:user_profiles(*))'),
                 supabase.from('payroll_adjustments').select('*, user:user_profiles(name)'),
@@ -217,9 +221,9 @@ export const useAppLogic = () => {
                 supabase.from('student_intervention_plans').select('*, student:students(name)'),
                 supabase.from('sip_logs').select('*, author:user_profiles(name)'),
                 supabase.from('teacher_checkins').select('*').order('created_at', { ascending: false }),
-                supabase.from('student_awards').select('*, student:students(name)'),
+                supabase.from('student_awards').select('*, student:students(name)').limit(10000),
                 supabase.from('staff_awards').select('*'),
-                supabase.from('academic_class_students').select('*'),
+                supabase.from('academic_class_students').select('*').limit(10000),
             ]);
 
             // Helper to safely extract data from result - always returns array for array types
@@ -318,9 +322,9 @@ export const useAppLogic = () => {
             // Student Data Fetching
              try {
                  const results = await Promise.allSettled([
-                     supabase.from('student_term_reports').select('*, term:terms(*)').eq('student_id', (userProfile as any).student_record_id),
+                     supabase.from('student_term_reports').select('*, term:terms(*)').eq('student_id', (userProfile as any).student_record_id).limit(10000),
                      supabase.from('quizzes').select('*, questions:quiz_questions(*)').eq('school_id', userProfile.school_id),
-                     supabase.from('quiz_responses').select('quiz_id').eq('user_id', userProfile.id),
+                     supabase.from('quiz_responses').select('quiz_id').eq('user_id', userProfile.id).limit(10000),
                      supabase.from('announcements').select('*, author:user_profiles(name)').eq('school_id', userProfile.school_id).order('created_at', { ascending: false }),
                  ]);
                  // Helper to safely extract data from result - always returns array
