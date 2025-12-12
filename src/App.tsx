@@ -268,7 +268,9 @@ const App: React.FC = () => {
             
             // Ignore auth tokens in initial hash
             if (hash.includes('access_token=') || hash.includes('error=')) {
-                return 'Dashboard';
+                // Try to restore from localStorage if auth redirect cleared hash
+                const lastView = localStorage.getItem('sg360_last_view');
+                return lastView || 'Dashboard';
             }
             
             return hash || 'Dashboard';
@@ -292,6 +294,22 @@ const App: React.FC = () => {
     const profileLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [hash, setHash] = useState(window.location.hash);
+    
+    // Store the initial target view from URL hash to preserve it across auth redirects
+    const initialTargetView = useRef<string | null>((() => {
+        try {
+            let hash = decodeURIComponent(window.location.hash.substring(1));
+            if (hash.startsWith('/')) hash = hash.substring(1);
+            // Ignore auth tokens and empty hashes
+            if (!hash || hash.includes('access_token=') || hash.includes('error=')) {
+                return null;
+            }
+            return hash;
+        } catch (e) {
+            console.warn("Failed to parse initial URL hash:", e);
+            return null;
+        }
+    })());
 
     // Rate limit tracking
     const [aiRateLimitCooldown, setAiRateLimitCooldown] = useState<number | null>(null);
@@ -785,8 +803,17 @@ const App: React.FC = () => {
                 console.log('[Auth] Student profile loaded successfully');
                 setBooting(false);
                 
-                // Navigate to student default view
-                setCurrentView(VIEWS.MY_SUBJECTS);
+                // Navigate to student default view or restore intended view
+                const allowedStudentViews = ['My Subjects', 'Rate My Teacher', 'Surveys', 'Reports'];
+                const targetView = initialTargetView.current;
+                
+                // Check if we have a stored target view that students can access
+                if (targetView && (allowedStudentViews.includes(targetView) || targetView.startsWith('Student Report/'))) {
+                    console.log('[Auth] Restoring student to initial target view:', targetView);
+                    setCurrentView(targetView);
+                } else {
+                    setCurrentView(VIEWS.MY_SUBJECTS);
+                }
                 return; 
             } else {
                 console.error('[Auth] No profile found for user');
@@ -978,11 +1005,18 @@ const App: React.FC = () => {
                         if (profileLoadTimeoutRef.current) clearTimeout(profileLoadTimeoutRef.current);
                         setIsProfileLoading(false);
                         setBooting(false);
-                        console.log('[Auth] Critical data loaded, showing dashboard...');
+                        console.log('[Auth] Critical data loaded, checking for target view...');
                         
-                        // Navigate to staff default view only if no hash is present
+                        // Navigate to staff default view only if no target view exists
                         const currentHash = decodeURIComponent(window.location.hash.substring(1) || '');
-                        if (!currentHash || currentHash.includes('access_token=') || currentHash.includes('error=')) {
+                        const targetView = initialTargetView.current;
+                        
+                        if (targetView && !AUTH_ONLY_VIEWS.includes(targetView)) {
+                            // We have a stored target view from initial load - navigate there
+                            console.log('[Auth] Restoring staff to initial target view:', targetView);
+                            setCurrentView(targetView);
+                        } else if (!currentHash || currentHash.includes('access_token=') || currentHash.includes('error=')) {
+                            // No valid hash or target view - go to dashboard
                             setCurrentView(VIEWS.DASHBOARD);
                         }
                         
@@ -1261,6 +1295,11 @@ const App: React.FC = () => {
             return; 
         }
 
+        // Save current view to localStorage for recovery after auth redirects
+        if (targetView && !AUTH_ONLY_VIEWS.includes(targetView)) {
+            localStorage.setItem('sg360_last_view', targetView);
+        }
+
         // Do not override hash if currentView is Dashboard but hash is something else (e.g. a public page)
         // Only sync if they are truly different and we want to enforce state -> URL sync
         if (targetView !== targetHash && targetHash !== 'student-login' && targetHash !== 'public-ratings' && targetHash !== 'teacher-login') {
@@ -1280,7 +1319,8 @@ const App: React.FC = () => {
                     return; 
                 }
                 
-                const targetView = hash || 'Dashboard';
+                // If hash is empty, try to restore from localStorage or use Dashboard
+                const targetView = hash || localStorage.getItem('sg360_last_view') || 'Dashboard';
                 console.log('[App] Hash changed - setting currentView to:', targetView, 'from hash:', hash);
                 setCurrentView(targetView);
             } catch (e) {
@@ -1297,9 +1337,20 @@ const App: React.FC = () => {
     // Redirect authenticated users away from auth-only views
     useEffect(() => {
         if (session && AUTH_ONLY_VIEWS.includes(currentView)) {
-            setCurrentView(VIEWS.DASHBOARD);
+            // Try to restore from localStorage if available, otherwise go to Dashboard
+            const lastView = localStorage.getItem('sg360_last_view');
+            setCurrentView(lastView && !AUTH_ONLY_VIEWS.includes(lastView) ? lastView : VIEWS.DASHBOARD);
         }
     }, [session, currentView]);
+
+    // Clear initialTargetView after auth is complete and we've set the view
+    // This prevents stale values from interfering with future navigation
+    useEffect(() => {
+        if (!booting && userProfile && initialTargetView.current) {
+            console.log('[App] Auth complete, clearing initial target view');
+            initialTargetView.current = null;
+        }
+    }, [booting, userProfile]);
 
     // --- Handle AI Navigation ---
     const handleAINavigation = useCallback((context: NavigationContext) => {
@@ -1347,11 +1398,23 @@ const App: React.FC = () => {
         return () => window.removeEventListener('hashchange', handleHashChange);
     }, []);
     
+    // Redirect students only when they try to access unauthorized views
+    // This should only trigger after authentication is complete (not during boot)
     useEffect(() => {
-        if (userType === 'student' && !['My Subjects', 'Rate My Teacher', 'Surveys', 'Reports'].includes(currentView) && !currentView.startsWith('Student Report/')) {
-             setCurrentView('My Subjects');
+        // Only enforce redirect if:
+        // 1. User is a student
+        // 2. Not currently booting (auth is complete)
+        // 3. Current view is not in allowed list
+        if (userType === 'student' && !booting && userProfile) {
+            const allowedViews = ['My Subjects', 'Rate My Teacher', 'Surveys', 'Reports'];
+            const isAllowedView = allowedViews.includes(currentView) || currentView.startsWith('Student Report/');
+            
+            if (!isAllowedView) {
+                console.log('[App] Student accessing unauthorized view, redirecting to My Subjects');
+                setCurrentView('My Subjects');
+            }
         }
-    }, [userType, currentView]);
+    }, [userType, currentView, booting, userProfile]);
 
     useEffect(() => {
         if (userProfile === undefined && session) {
