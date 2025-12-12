@@ -592,7 +592,7 @@ const ResultManager: React.FC<ResultManagerProps> = ({
                                                     {isGeneratingComments === as.id ? <Spinner size="sm"/> : <WandIcon className="w-3 h-3"/>} AI Comments
                                                 </button>
                                             )}
-                                            {canLock && as.submitted_at && (
+                                            {canLock && as.submitted_at !== null && (
                                                 <button 
                                                     onClick={() => handleReset(as.id)} 
                                                     disabled={isProcessing === as.id}
