@@ -18,7 +18,7 @@ interface ResultManagerProps {
     scoreEntries: ScoreEntry[];
     users: UserProfile[];
     onLockScores: (assignmentId: number) => Promise<boolean>;
-    onResetSubmission: (assignmentId: number, alsoUnlock?: boolean) => Promise<boolean>;
+    onResetSubmission: (assignmentId: number) => Promise<boolean>;
     userPermissions: string[];
     students: Student[];
     studentTermReports: StudentTermReport[];
@@ -216,25 +216,22 @@ const ResultManager: React.FC<ResultManagerProps> = ({
         }
     };
     
-    const handleResetSubmission = async (assignment: AcademicTeachingAssignment) => {
-        const isLocked = assignment.is_locked;
+    const handleReset = async (assignmentId: number) => {
+        if (!canLock) return;
         
-        // First confirm the reset action
-        if (!window.confirm(`Reset submission for ${assignment.academic_class?.name} - ${assignment.subject_name}? The teacher will be able to edit and re-submit scores.`)) {
-            return;
-        }
+        const assignment = assignmentsForTerm.find(a => a.id === assignmentId);
+        if (!assignment) return;
         
-        // If locked, ask if they also want to unlock
-        let alsoUnlock = false;
-        if (isLocked) {
-            alsoUnlock = window.confirm(
-                `This assignment is also locked. Do you want to unlock it as well?\n\nClick OK to reset AND unlock, or Cancel to only reset the submission.`
-            );
-        }
+        // First confirmation
+        const resetConfirmed = window.confirm(
+            "Are you sure you want to reset this submission? The teacher will be able to edit and re-submit scores."
+        );
         
-        setIsResetting(assignment.id);
-        await onResetSubmission(assignment.id, alsoUnlock);
-        setIsResetting(null);
+        if (!resetConfirmed) return;
+        
+        setIsProcessing(assignmentId);
+        await onResetSubmission(assignmentId);
+        setIsProcessing(null);
     };
     
     // Generate Subject Teacher Comments
@@ -594,6 +591,16 @@ const ResultManager: React.FC<ResultManagerProps> = ({
                                                     title="Generate AI Comments for Students"
                                                 >
                                                     {isGeneratingComments === as.id ? <Spinner size="sm"/> : <WandIcon className="w-3 h-3"/>} AI Comments
+                                                </button>
+                                            )}
+                                            {canLock && as.submitted_at !== null && (
+                                                <button 
+                                                    onClick={() => handleReset(as.id)} 
+                                                    disabled={isProcessing === as.id}
+                                                    className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 disabled:opacity-50 flex items-center gap-1"
+                                                    title="Reset submission to allow teacher to re-enter scores"
+                                                >
+                                                    {isProcessing === as.id ? <Spinner size="sm"/> : <RefreshIcon className="w-3 h-3"/>} Reset
                                                 </button>
                                             )}
                                             {canLock && !as.is_locked && (

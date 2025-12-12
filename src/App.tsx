@@ -2856,15 +2856,34 @@ const App: React.FC = () => {
         }
     }, [addToast]);
 
-    // Reset submission for academic assignment (for Result Manager)
-    const handleResetSubmission = useCallback(async (assignmentId: number, alsoUnlock: boolean = false): Promise<boolean> => {
+    const handleResetSubmission = useCallback(async (assignmentId: number): Promise<boolean> => {
         try {
-            const updates: any = { submitted_at: null };
-            if (alsoUnlock) {
-                updates.is_locked = false;
+            // Find the assignment to check if it's locked
+            const assignment = academicAssignments.find(a => a.id === assignmentId);
+            if (!assignment) {
+                addToast('Assignment not found.', 'error');
+                return false;
             }
-            
-            const { error } = await Offline.update('academic_teaching_assignments', updates, { id: assignmentId });
+
+            // Build the update payload
+            const updatePayload: { submitted_at: null; is_locked?: boolean } = {
+                submitted_at: null
+            };
+
+            // If the assignment is also locked, ask if they want to unlock it
+            if (assignment.is_locked) {
+                const unlockConfirmed = window.confirm(
+                    "This assignment is also locked. Do you want to unlock it as well?"
+                );
+                if (unlockConfirmed) {
+                    updatePayload.is_locked = false;
+                }
+            }
+
+            const { error } = await Offline.update('academic_teaching_assignments', 
+                updatePayload, 
+                { id: assignmentId }
+            );
             
             if (error) {
                 addToast(`Failed to reset submission: ${error.message}`, 'error');
@@ -2873,7 +2892,7 @@ const App: React.FC = () => {
             
             // Update local state
             setAcademicAssignments(prev => 
-                prev.map(a => a.id === assignmentId ? { ...a, submitted_at: null, ...(alsoUnlock ? { is_locked: false } : {}) } : a)
+                prev.map(a => a.id === assignmentId ? { ...a, ...updatePayload } : a)
             );
             
             addToast('Submission reset successfully. Teacher can now re-enter scores.', 'success');
@@ -2882,7 +2901,7 @@ const App: React.FC = () => {
             addToast(`Error resetting submission: ${e.message}`, 'error');
             return false;
         }
-    }, [addToast]);
+    }, [academicAssignments, addToast]);
 
     // Update result comments (for Result Manager)
     const handleUpdateResultComments = useCallback(async (reportId: number, teacherComment: string, principalComment: string): Promise<void> => {
