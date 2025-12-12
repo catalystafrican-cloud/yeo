@@ -26,8 +26,8 @@ const TeacherCheckinHistory: React.FC<{
                                 <img 
                                     src={c.photo_url} 
                                     alt="Check-in" 
-                                    className="w-20 h-15 rounded-md object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" 
-                                    style={{ aspectRatio: '4/3' }}
+                                    className="w-20 rounded-md object-contain bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" 
+                                    style={{ aspectRatio: '4/3', height: '60px' }}
                                 />
                             </a>
                         )}

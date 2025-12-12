@@ -43,7 +43,7 @@ const EarlyWarningSystem: React.FC<EarlyWarningSystemProps> = ({
 
   // Helper function to calculate attendance rate for a student
   const calculateAttendanceRate = (studentId: number): number | null => {
-    const studentRecords: any[] = [];
+    const studentRecords: { status?: string; session_date?: string }[] = [];
     
     // Collect all attendance records for this student from all class groups
     safeClassGroups.forEach(group => {
@@ -95,7 +95,8 @@ const EarlyWarningSystem: React.FC<EarlyWarningSystemProps> = ({
   const getRecentGrades = (studentId: number, count: number = 6): number[] => {
     const studentScores = safeScoreEntries
       .filter(se => se.student_id === studentId)
-      .sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())
+      .map(se => ({ ...se, timestamp: new Date(se.created_at || '').getTime() }))
+      .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, count)
       .map(se => se.total_score || 0);
     
@@ -104,17 +105,20 @@ const EarlyWarningSystem: React.FC<EarlyWarningSystemProps> = ({
 
   // Helper function to get recent attendance for a student
   const getRecentAttendance = (studentId: number, count: number = 10): boolean[] => {
-    const studentRecords: any[] = [];
+    const studentRecords: { status?: string; session_date?: string; timestamp?: number }[] = [];
     
     safeClassGroups.forEach(group => {
       const member = group.members?.find(m => m.student_id === studentId);
       if (member && member.records) {
-        studentRecords.push(...member.records);
+        studentRecords.push(...member.records.map(r => ({
+          ...r,
+          timestamp: new Date(r.session_date || '').getTime()
+        })));
       }
     });
     
     const sortedRecords = studentRecords
-      .sort((a, b) => new Date(b.session_date || '').getTime() - new Date(a.session_date || '').getTime())
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       .slice(0, count);
     
     return sortedRecords.map(r => ['present', 'p'].includes(r.status?.toLowerCase() || ''));
@@ -139,12 +143,14 @@ const EarlyWarningSystem: React.FC<EarlyWarningSystemProps> = ({
         const recentGrades = getRecentGrades(student.id);
         const recentAttendance = getRecentAttendance(student.id);
 
+        // Note: Using 0 for missing data is intentional - students with no data 
+        // will appear at-risk, which alerts staff to engage with them
         return {
           student,
-          attendanceRate: attendanceRate ?? 0,  // Use 0 if no data
-          gradeAverage: gradeAverage ?? 0,      // Use 0 if no data
+          attendanceRate: attendanceRate ?? 0,  // 0 indicates no attendance data
+          gradeAverage: gradeAverage ?? 0,      // 0 indicates no grade data
           behaviorIncidents,
-          assignmentCompletionRate: assignmentCompletionRate ?? 0,  // Use 0 if no data
+          assignmentCompletionRate: assignmentCompletionRate ?? 0,  // 0 indicates no assignment data
           recentGrades: recentGrades.length > 0 ? recentGrades : [0],
           recentAttendance: recentAttendance.length > 0 ? recentAttendance : [false],
         };
