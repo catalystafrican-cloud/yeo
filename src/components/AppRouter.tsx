@@ -59,6 +59,7 @@ import StudentDashboard from './StudentDashboard';
 import StudentProfileEdit from './StudentProfileEdit';
 import StudentStrikeAppeals from './StudentStrikeAppeals';
 import StudentSubjectChoicesView from './admin/StudentSubjectChoicesView';
+import StudentSubjectEnrollmentManager from './admin/StudentSubjectEnrollmentManager';
 
 // Lazy load heavy components and those used dynamically elsewhere to fix build warnings and reduce chunk size
 const TimetableView = lazy(() => import('./TimetableView'));
@@ -333,6 +334,17 @@ const AppRouter: React.FC<AppRouterProps> = ({ currentView, data, actions }) => 
         case VIEWS.STUDENT_SUBJECT_CHOICES_ADMIN:
             return <StudentSubjectChoicesView
                 schoolId={data.userProfile.school_id}
+                addToast={actions.addToast}
+            />;
+        case VIEWS.STUDENT_SUBJECT_ENROLLMENT_MANAGER:
+            return <StudentSubjectEnrollmentManager
+                schoolId={data.userProfile.school_id}
+                students={data.students}
+                allSubjects={data.allSubjects}
+                academicClasses={data.academicClasses}
+                terms={data.terms}
+                studentSubjectEnrollments={data.studentSubjectEnrollments}
+                onRefreshData={actions.reloadData}
                 addToast={actions.addToast}
             />;
         case VIEWS.ANALYTICS:

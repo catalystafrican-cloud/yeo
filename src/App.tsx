@@ -5921,6 +5921,11 @@ Focus on assignments with low completion rates or coverage issues. Return an emp
                                     handleBulkDeleteStudentAccounts,
                                     handleDeleteStudent,
                                     handleBulkDeleteStudents,
+                                    reloadData: async () => {
+                                        if (session?.user) {
+                                            await fetchData(session.user, true);
+                                        }
+                                    },
                                 }}
                             />
                         </Suspense>
