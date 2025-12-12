@@ -48,13 +48,13 @@ const StudentSubjectEnrollmentManager: React.FC<StudentSubjectEnrollmentManagerP
     return academicClasses.filter(ac => ac.is_active);
   }, [academicClasses]);
 
-  // Get students enrolled in the selected academic class and term
+  // Get students to show for the selected academic class and term
+  // Note: This shows all students in the school. In production, you may want to
+  // filter by academic_class_students to only show students enrolled in the selected class.
   const enrolledStudents = useMemo(() => {
     if (!selectedAcademicClassId || !selectedTermId) return [];
     
-    // For now, we'll show all students since we need academic_class_students
-    // In a real scenario, we'd filter based on academic_class_students
-    return students.filter(s => s.id > 0).sort((a, b) => a.name.localeCompare(b.name));
+    return students.sort((a, b) => a.name.localeCompare(b.name));
   }, [students, selectedAcademicClassId, selectedTermId]);
 
   // Get subjects for the selected class
@@ -155,12 +155,11 @@ const StudentSubjectEnrollmentManager: React.FC<StudentSubjectEnrollmentManagerP
       const newEnrollmentStatus = !isEnrolled(studentId, subjectId);
 
       if (currentEnrollment) {
-        // Update existing record
+        // Update existing record - timestamp updated automatically by database
         const { error } = await supabase
           .from('student_subject_enrollments')
           .update({ 
-            is_enrolled: newEnrollmentStatus,
-            updated_at: new Date().toISOString()
+            is_enrolled: newEnrollmentStatus
           })
           .eq('id', currentEnrollment.id);
 
@@ -206,24 +205,15 @@ const StudentSubjectEnrollmentManager: React.FC<StudentSubjectEnrollmentManagerP
         subject_id: subjectId,
         academic_class_id: selectedAcademicClassId,
         term_id: selectedTermId,
-        is_enrolled: enroll,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        is_enrolled: enroll
       }));
 
-      // Delete existing records for this subject/class/term combo
-      await supabase
-        .from('student_subject_enrollments')
-        .delete()
-        .eq('subject_id', subjectId)
-        .eq('academic_class_id', selectedAcademicClassId)
-        .eq('term_id', selectedTermId)
-        .in('student_id', filteredStudents.map(s => s.id));
-
-      // Insert new records
+      // Use upsert to ensure atomicity - timestamps handled by database
       const { error } = await supabase
         .from('student_subject_enrollments')
-        .insert(updates);
+        .upsert(updates, {
+          onConflict: 'student_id,subject_id,academic_class_id,term_id'
+        });
 
       if (error) throw error;
 

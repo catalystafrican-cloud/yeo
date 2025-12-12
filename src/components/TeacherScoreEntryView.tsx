@@ -62,7 +62,10 @@ const TeacherScoreEntryView: React.FC<TeacherScoreEntryViewProps> = ({
             
             // Get subject ID from subject name
             const subject = allSubjects.find(sub => sub.name === assignment.subject_name);
-            if (!subject) return true; // Fallback: show all if subject not found
+            if (!subject) {
+                console.warn(`[TeacherScoreEntryView] Subject not found for assignment: ${assignment.subject_name}. Showing all class students as fallback.`);
+                return true; // Fallback: show all if subject not found
+            }
             
             // Check for enrollment records for this subject in this class
             const enrollmentRecords = studentSubjectEnrollments.filter(sse =>
